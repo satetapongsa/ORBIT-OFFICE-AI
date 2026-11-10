@@ -78,6 +78,8 @@ future image tags may not be published.
 (path-style addressing), so any S3-compatible store works.
 **Consequences.** Swapping MinIO for another S3-compatible server or a cloud
 bucket is configuration only.
+**Update 2026-11-11.** The pinned `minio/minio` tag (and the whole Docker Hub
+repository) is no longer available — see ADR-013.
 
 ## ADR-010 — Frontend stack details (2026-11-10)
 **Decision.** Next.js 16 (App Router, Turbopack, `cacheComponents` enabled as
@@ -95,3 +97,34 @@ for wheel availability; local development has been verified on Python 3.15.
 ## ADR-012 — Starlette TestClient uses httpx2 (2026-11-10)
 **Context.** Starlette 1.x deprecates `httpx` for its test client.
 **Decision.** Dev dependency `httpx2` instead of `httpx`.
+
+## ADR-013 — Object storage image: digest-pinned `pgsty/minio` (2026-11-11)
+**Context.** `docker pull minio/minio:…` fails ("repository does not exist");
+`quay.io/minio/minio` requires authentication. Upstream no longer publishes
+community images. The specification requires MinIO.
+**Decision.** Use the community MinIO build maintained by the Pigsty project,
+`pgsty/minio` (`RELEASE.2026-08-04T00-00-00Z`, source github.com/pgsty/minio,
+Red Hat UBI 9 micro base), **pinned by digest**
+`sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372`.
+Chosen by the project owner over building from source or SeaweedFS.
+**Consequences.** Same MinIO server, console, `mc` and configuration; the
+healthcheck (`mc ready local`) is unchanged. It is a third-party build: review
+upstream changes before bumping the digest; for production prefer a managed S3
+service or an image built in-house from official source (Phase 9).
+
+## ADR-014 — Selector event loop for native Windows development (2026-11-11)
+**Context.** psycopg 3 cannot run in async mode on Windows' default
+`ProactorEventLoop` (`InterfaceError`). Containers (Linux) are unaffected.
+**Decision.** `app.core.event_loop.selector_event_loop` is a loop factory for
+`uvicorn --loop` and anyio's `loop_factory` (used by the integration tests).
+The app logs `windows_proactor_event_loop` at startup when the unsupported loop
+is detected.
+**Consequences.** Native Windows runs need the extra `--loop` argument; Docker
+images keep uvicorn's default loop (uvloop).
+
+## ADR-015 — `127.0.0.1` instead of `localhost` for host-side defaults (2026-11-11)
+**Context.** On Windows, `localhost` resolves to `::1` first; Compose publishes
+ports on `127.0.0.1` only, so host processes stalled on IPv6 attempts
+(integration run: 150 s vs 1.6 s).
+**Decision.** `.env.example`, settings defaults, the smoke test and the Next.js
+proxy default use `127.0.0.1`. Container-to-container URLs keep service names.
