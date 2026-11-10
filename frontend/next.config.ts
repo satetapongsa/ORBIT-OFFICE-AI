@@ -8,7 +8,7 @@ import type { NextConfig } from "next";
  * BACKEND_INTERNAL_URL is server-side only and is read when the server starts
  * (`next dev`) or at build time (`next build` / standalone output).
  */
-const backendUrl = (process.env.BACKEND_INTERNAL_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const backendUrl = (process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   output: "standalone",

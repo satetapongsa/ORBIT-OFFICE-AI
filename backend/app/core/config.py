@@ -55,19 +55,19 @@ class Settings(BaseSettings):
 
     # --- PostgreSQL ------------------------------------------------------------------
     database_url: SecretStr = SecretStr(
-        "postgresql+psycopg://aura:aura_dev_password@localhost:5432/aura_office"
+        "postgresql+psycopg://aura:aura_dev_password@127.0.0.1:5432/aura_office"
     )
     database_pool_size: int = Field(default=10, ge=1)
     database_max_overflow: int = Field(default=10, ge=0)
     database_echo: bool = False
 
     # --- Redis / Celery --------------------------------------------------------------
-    redis_url: SecretStr = SecretStr("redis://localhost:6379/0")
+    redis_url: SecretStr = SecretStr("redis://127.0.0.1:6379/0")
     celery_broker_url: SecretStr | None = None  # defaults to redis_url
     celery_result_backend: SecretStr | None = None  # defaults to redis_url
 
     # --- Object storage (S3-compatible; MinIO locally) -------------------------------
-    storage_endpoint_url: str | None = "http://localhost:9000"  # None = AWS S3 default
+    storage_endpoint_url: str | None = "http://127.0.0.1:9000"  # None = AWS S3 default
     storage_region: str = "us-east-1"
     storage_access_key: SecretStr = SecretStr("aura-minio")
     storage_secret_key: SecretStr = SecretStr(DEV_STORAGE_SECRET_PLACEHOLDER)

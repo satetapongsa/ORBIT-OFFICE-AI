@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Smoke-test a running stack (docker compose up, or local processes).
-# Usage: scripts/smoke-test.sh [base_url]   default: http://localhost:3000
+# Usage: scripts/smoke-test.sh [base_url]   default: http://127.0.0.1:3000
 set -euo pipefail
-BASE="${1:-http://localhost:3000}"
-API="${API_URL:-http://localhost:8000}"
+BASE="${1:-http://127.0.0.1:3000}"
+API="${API_URL:-http://127.0.0.1:8000}"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
