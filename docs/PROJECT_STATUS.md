@@ -1,14 +1,14 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 1 — System Foundation & Project Scaffold (code complete; NOT accepted — Docker-based verification blocked: Docker not installed)
-**Last Updated:** 2026-11-10
+**Current Phase:** Phase 1 — System Foundation & Project Scaffold — ✅ **ACCEPTED** (verified in Docker on 2026-11-11). Next: Phase 2.
+**Last Updated:** 2026-11-11
 
 ## Completed
 
 ### Phase 0 — Project initialization & architecture
 - Workspace inspected (was empty); git repository initialised (`main`).
 - Documentation: `PROJECT_OVERVIEW`, `ARCHITECTURE`, `DATABASE_DESIGN`, `API_CONVENTIONS`,
-  `SECURITY`, `DEVELOPMENT_PHASES`, `PROJECT_STATUS`, `DECISIONS` (ADR-001…012), `RUNBOOK`,
+  `SECURITY`, `DEVELOPMENT_PHASES`, `PROJECT_STATUS`, `DECISIONS` (ADR-001…015), `RUNBOOK`,
   root `README.md`, session instructions file.
 
 ### Phase 1 — Foundation
@@ -37,23 +37,74 @@
   (dev + non-root prod), Nginx reverse-proxy config, `.env.example`, `.gitignore`,
   `.dockerignore`, `.editorconfig`, `.gitattributes`.
 - **Scripts**: `scripts/check.sh` (all static checks + tests), `scripts/smoke-test.sh` (running stack).
+- **Verification fixes (2026-11-11)**: object storage image switched to digest-pinned
+  `pgsty/minio` (upstream `minio/minio` no longer published, ADR-013); selector event-loop
+  factory + startup warning for native Windows runs (async psycopg, ADR-014); host defaults use
+  `127.0.0.1` instead of `localhost` (ADR-015); Nginx de-duplicates security headers;
+  integration tests extended (Redis round trip, S3 put/get/delete, Celery ping).
 
 ## In Progress
-- Phase 1 verification on a machine with Docker (see Known Issues #1).
+- Nothing. Phase 1 is complete.
 
 ## Remaining
-- Phase 1: run `docker compose up --build`, `scripts/smoke-test.sh`,
-  `AURA_RUN_INTEGRATION=1 pytest -m integration`, Celery `system.ping` round trip.
 - Phases 2–9 per `docs/DEVELOPMENT_PHASES.md`.
 
 ## Technical Decisions
 See `docs/DECISIONS.md`. Key ones: same-origin API via proxy (ADR-002); psycopg 3 for async and
 sync (ADR-003); permission-based RBAC with roles as data (ADR-005); ACL evaluated at query time
 for RAG (ADR-006); provider-independent AI with separate chat/embedding config (ADR-007);
-MinIO pinned + overridable, S3-generic code (ADR-009).
+S3-generic storage code (ADR-009) with digest-pinned `pgsty/minio` (ADR-013); selector event
+loop on native Windows (ADR-014); `127.0.0.1` host defaults (ADR-015).
 
 ## Tests
-Commands actually executed on 2026-11-10 (Windows 11, Python 3.15.2, Node 26.13):
+### Phase 1 verification in Docker — 2026-11-11
+Environment: Windows 11, Docker Desktop (engine 29.9.3, Compose v5.7.0, WSL2, 12 CPU, ~8 GB),
+host Python 3.15.2 / Node 26.13; containers Python 3.13.18 / Node 22.
+
+| # | Check (command) | Result |
+| --- | --- | --- |
+| 1 | `docker compose config --quiet` | ✅ valid; 8 services (nginx behind `proxy` profile) |
+| 2 | `docker compose build` (dev) + `docker build --target prod` (both) | ✅ dev backend 546 MB, dev frontend 216 MB, prod backend 397 MB, prod frontend 308 MB |
+| 3 | `docker compose down` → `docker compose up -d` (clean start) | ✅ all services up in 17 s in dependency order; `migrate` exits 0; postgres/redis/minio/backend healthy |
+| 4 | PostgreSQL + pgvector (`psql`) | ✅ PostgreSQL 17.11; extensions `vector 0.8.7`, `pg_trgm 1.6` installed by migration |
+| 5 | Redis (`redis-cli ping`, integration test) | ✅ Redis 7.4.12 `PONG`; set/get/delete round trip |
+| 6 | MinIO / S3 (`mc ls`, integration test) | ✅ `pgsty/minio` RELEASE.2026-08-04 healthy; bucket `aura-documents` auto-created; S3 put/get/delete round trip via boto3 |
+| 7 | Celery worker | ✅ ready on `default` + `documents`; `system.ping` round trip API→Redis→worker→result |
+| 8 | Alembic | ✅ `upgrade head` → `0001 (head)`; `downgrade base` + `upgrade head` round trip |
+| 9 | Integration tests | ✅ container `pytest`: 31 passed, 1 skipped (Windows-only test); host `AURA_RUN_INTEGRATION=1 pytest`: 32 passed |
+| 10 | `bash scripts/smoke-test.sh` | ✅ liveness, readiness **200**, frontend page, frontend→backend proxy |
+| 11 | Frontend + backend via Docker | ✅ backend container healthy; frontend container serves Thai UI with real readiness data; `/api` proxied to the `backend` service |
+| — | Nginx (`--profile proxy`) on :8080 | ✅ page 200, `/api/v1/health` 200, `nginx -t` ok, one copy of each security header |
+| — | Prod images run | ✅ non-root `aura`, healthcheck healthy, 4 uvicorn workers, standalone frontend proxy 200 |
+| — | Native Windows backend (RUNBOOK option B) | ✅ with `--loop app.core.event_loop:selector_event_loop` readiness 200; without it the `windows_proactor_event_loop` warning is logged |
+| — | `scripts/check.sh` | ✅ ruff, mypy (36 files), pytest 27 passed / 5 skipped (integration), alembic SQL, ESLint, tsc, Vitest 12 passed, Prettier |
+| — | `npm run build` | ✅ compiled |
+
+### Problems found during verification and fixed
+1. `minio/minio` image no longer exists on Docker Hub (quay.io: 401) → digest-pinned `pgsty/minio` (ADR-013).
+2. Native Windows backend could not reach PostgreSQL (`InterfaceError`, async psycopg on the Proactor loop) → selector loop factory + startup warning (ADR-014).
+3. Host connections via `localhost` stalled on IPv6 (integration run 150 s) → `127.0.0.1` defaults (ADR-015); run now ~1.5 s.
+4. Nginx duplicated `X-Frame-Options` / `X-Content-Type-Options` / `Referrer-Policy` → upstream copies hidden.
+5. Verification commands in docs used `&&`, which Windows PowerShell 5.1 rejects → one command per line.
+
+### Phase 1 acceptance criteria (actual)
+| Criterion | Status |
+| --- | --- |
+| Development environment starts with Docker Compose | ✅ |
+| Frontend can load | ✅ (`next dev`, Docker dev, prod standalone, behind Nginx) |
+| Backend can start | ✅ (Docker dev + prod, native Windows) |
+| Database connection works | ✅ |
+| Redis connection works | ✅ |
+| MinIO can start | ✅ |
+| Health endpoints work | ✅ live 200, readiness 200 with all required components ok |
+| Environment variables documented | ✅ `.env.example` |
+| Basic test suite runs | ✅ backend 32 (host, with integration), frontend 12 |
+| README contains setup instructions | ✅ |
+
+**Phase 1 is accepted. Phase 2 may start.**
+
+### Earlier runs (2026-11-10, before Docker was available)
+Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 
 | Command | Result |
 | --- | --- |
@@ -73,65 +124,29 @@ Commands actually executed on 2026-11-10 (Windows 11, Python 3.15.2, Node 26.13)
 | `docker compose up` | ⚠️ **not executed** — Docker not installed on this machine |
 | `pytest -m integration` with `AURA_RUN_INTEGRATION=1` | ⚠️ **not executed** — needs PostgreSQL/Redis/MinIO |
 
-### Phase 1 verification attempt — 2026-11-10 (second session)
-Docker Desktop, WSL and any container runtime are **not installed** on this machine, so steps
-1–3 and 7–11 of the verification request could not be executed. Checks that do not need Docker:
-
-| Check | Result |
-| --- | --- |
-| Docker / WSL present (`docker`, `wsl -l`) | ❌ not installed — blocks Compose verification |
-| Backend Dockerfile dependency extraction (same `tomllib` one-liner as the image) | ✅ produces runtime (11) and dev (5) requirement lists |
-| Frontend `npm ci --dry-run` (as in the image's `deps` stage) | ✅ lockfile consistent with `package.json` |
-| Standalone server like the `prod` image (`node server.js`, static + public copied) | ✅ serves `/` (title `สถานะระบบ · AURA OFFICE AI`), security headers, no `X-Powered-By`, `/api/*` proxy → backend |
-| `scripts/smoke-test.sh` against standalone build + local backend | ❌ stops at readiness 503 (expected: no PostgreSQL/Redis/MinIO) — liveness, page and proxy checks pass when run individually |
-| Global git excludes | ✅ `CLAUDE.md`, `AGENTS.md`, `.claude/` ignored by `~/.gitignore_global`; all 9 `docs/*.md` tracked; no `.env` exists or is tracked |
-
-### Phase 1 acceptance criteria (actual)
-| Criterion | Status |
-| --- | --- |
-| Development environment starts with Docker Compose | ❌ not verified (no Docker) |
-| Frontend can load | ✅ (`next dev` and standalone build) |
-| Backend can start | ✅ (local uvicorn) |
-| Database connection works | ❌ not verified (no PostgreSQL) |
-| Redis connection works | ❌ not verified (no Redis) |
-| MinIO can start | ❌ not verified (no Docker) |
-| Health endpoints work | ✅ (live 200; readiness reports failures correctly with 503) |
-| Environment variables documented | ✅ `.env.example` |
-| Basic test suite runs | ✅ backend 24 passed / 2 skipped; frontend 12 passed |
-| README contains setup instructions | ✅ |
-
-**Phase 1 is not accepted yet. Phase 2 must not start** until Docker is available and the four ❌
-criteria plus integration tests, Celery round trip and smoke test pass.
-
 ## Known Issues
-1. **Docker-based acceptance criteria unverified.** Docker, PostgreSQL and Redis are not installed
-   on the development machine, so Compose startup, real DB/Redis/MinIO connectivity, migrations
-   against PostgreSQL, the Celery worker and Dockerfile builds have not been run. Code paths are
-   covered by unit tests with mocked checks and by an integration test that is ready to run.
-2. MinIO image tag `RELEASE.2025-04-22T22-12-26Z` not pulled/verified; override with
-   `MINIO_IMAGE` if unavailable (ADR-009).
-3. Readiness endpoint is unauthenticated and lists component status; acceptable for internal dev,
+1. Object storage uses a third-party MinIO build (`pgsty/minio`, digest-pinned). Review before
+   bumping; production should use managed S3 or an in-house build from official source (Phase 9).
+2. Readiness endpoint is unauthenticated and lists component status; acceptable for internal dev,
    to be reviewed (restrict detail or network-limit) in Phase 9.
-4. Backend startup waits up to `2 × HEALTH_CHECK_TIMEOUT_SECONDS` (6 s default) for dev bucket
+3. Backend startup waits up to `2 × HEALTH_CHECK_TIMEOUT_SECONDS` (6 s default) for dev bucket
    creation when object storage is unreachable.
-5. Next.js dev server writes `frontend/AGENTS.md` automatically; it is ignored by the global git
+4. Next.js dev server writes `frontend/AGENTS.md` automatically; it is ignored by the global git
    excludes and not part of the project.
+5. The `worker` container lists `8000/tcp` (inherited `EXPOSE` from the shared dev image); cosmetic.
 6. No authentication yet — every page is public until Phase 2.
 
 ## Next Phase
-**Phase 2 — Authentication & Authorization** (after closing Known Issue #1): users, departments,
-roles, permissions, Argon2id, JWT access + rotating refresh tokens in HttpOnly cookies, CSRF,
-authorization dependencies, document ACL foundation, audit logs, seed data, login UI,
-permission-aware navigation, auth/authz tests.
+**Phase 2 — Authentication & Authorization**: users, departments, roles, permissions, Argon2id,
+JWT access + rotating refresh tokens in HttpOnly cookies, CSRF, authorization dependencies,
+document ACL foundation, audit logs, seed data, login UI, permission-aware navigation,
+auth/authz tests.
 
 ## Next Command
-First verify Phase 1 on a machine with Docker. Run one command per line (Windows PowerShell 5.1
-does not support `&&`; the smoke test is a bash script, run it via Git Bash):
+Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
 
 ```powershell
-docker version
-Copy-Item .env.example .env
-docker compose up --build -d
+docker compose up -d
 bash scripts/smoke-test.sh
 ```
 

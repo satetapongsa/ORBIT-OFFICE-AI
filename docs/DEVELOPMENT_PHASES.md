@@ -20,19 +20,19 @@ Acceptance criteria
 - [x] Project structure defined
 - [x] Future development instructions preserved (`PROJECT_STATUS.md`, `RUNBOOK.md`, `DECISIONS.md`)
 
-## Phase 1 — System foundation & project scaffold 🟡
+## Phase 1 — System foundation & project scaffold ✅
 
 Frontend and backend scaffolds, PostgreSQL + pgvector, Redis, MinIO, Docker
 Compose, environment configuration, DB connection, Alembic, health endpoints,
 application shell, logging, initial tests.
 
-Acceptance criteria
-- [ ] Development environment starts with Docker Compose — *written, not yet run (no Docker on the build machine)*
+Acceptance criteria (verified in Docker on 2026-11-11 — see `PROJECT_STATUS.md`)
+- [x] Development environment starts with Docker Compose
 - [x] Frontend loads
 - [x] Backend starts
-- [ ] Database connection works — *implemented + integration test written; needs a running PostgreSQL*
-- [ ] Redis connection works — *implemented + checked by readiness; needs a running Redis*
-- [ ] MinIO starts — *Compose service written; needs Docker*
+- [x] Database connection works
+- [x] Redis connection works
+- [x] MinIO starts
 - [x] Health endpoints work
 - [x] Environment variables documented (`.env.example`)
 - [x] Basic test suite runs
