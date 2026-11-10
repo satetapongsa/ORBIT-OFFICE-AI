@@ -3,6 +3,11 @@
 Commands assume the repository root unless stated otherwise. On Windows use Git
 Bash (paths with `/`) or adapt to PowerShell.
 
+> **Windows PowerShell 5.1:** `&&` is not supported — run chained commands one per
+> line (or `A; if ($?) { B }`). Run the `.sh` scripts with `bash scripts/<name>.sh`
+> (Git Bash). First confirm Docker works: `docker version` must print both a
+> **Client** and a **Server** section.
+
 ## 1. Prerequisites
 
 | Tool            | Version                 | Needed for                         |

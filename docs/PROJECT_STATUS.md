@@ -125,10 +125,14 @@ authorization dependencies, document ACL foundation, audit logs, seed data, logi
 permission-aware navigation, auth/authz tests.
 
 ## Next Command
-First verify Phase 1 on a machine with Docker:
+First verify Phase 1 on a machine with Docker. Run one command per line (Windows PowerShell 5.1
+does not support `&&`; the smoke test is a bash script, run it via Git Bash):
 
-```bash
-cp .env.example .env && docker compose up --build -d && scripts/smoke-test.sh
+```powershell
+docker version
+Copy-Item .env.example .env
+docker compose up --build -d
+bash scripts/smoke-test.sh
 ```
 
 Then start the next session with:
