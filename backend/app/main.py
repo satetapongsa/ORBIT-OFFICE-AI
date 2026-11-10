@@ -14,6 +14,7 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.db import dispose_engines
 from app.core.errors import register_exception_handlers
+from app.core.event_loop import is_unsupported_windows_loop
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
 from app.core.redis import close_redis
@@ -34,6 +35,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         ai_chat_provider=settings.ai_chat_provider.value,
         ai_embedding_provider=settings.ai_embedding_provider.value,
     )
+    if is_unsupported_windows_loop():
+        logger.warning(
+            "windows_proactor_event_loop",
+            hint="async PostgreSQL access will fail; start uvicorn with "
+            "--loop app.core.event_loop:selector_event_loop",
+        )
     if settings.storage_auto_create_bucket and not settings.is_production:
         # Bounded so an unreachable object store never blocks API startup;
         # readiness reports the storage problem instead.
