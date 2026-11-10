@@ -1,6 +1,6 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 1 — System Foundation & Project Scaffold (code complete; Docker-based verification pending)
+**Current Phase:** Phase 1 — System Foundation & Project Scaffold (code complete; NOT accepted — Docker-based verification blocked: Docker not installed)
 **Last Updated:** 2026-11-10
 
 ## Completed
@@ -72,6 +72,36 @@ Commands actually executed on 2026-11-10 (Windows 11, Python 3.15.2, Node 26.13)
 | Compose YAML parse (PyYAML) | ✅ 8 services, container hostnames resolved |
 | `docker compose up` | ⚠️ **not executed** — Docker not installed on this machine |
 | `pytest -m integration` with `AURA_RUN_INTEGRATION=1` | ⚠️ **not executed** — needs PostgreSQL/Redis/MinIO |
+
+### Phase 1 verification attempt — 2026-11-10 (second session)
+Docker Desktop, WSL and any container runtime are **not installed** on this machine, so steps
+1–3 and 7–11 of the verification request could not be executed. Checks that do not need Docker:
+
+| Check | Result |
+| --- | --- |
+| Docker / WSL present (`docker`, `wsl -l`) | ❌ not installed — blocks Compose verification |
+| Backend Dockerfile dependency extraction (same `tomllib` one-liner as the image) | ✅ produces runtime (11) and dev (5) requirement lists |
+| Frontend `npm ci --dry-run` (as in the image's `deps` stage) | ✅ lockfile consistent with `package.json` |
+| Standalone server like the `prod` image (`node server.js`, static + public copied) | ✅ serves `/` (title `สถานะระบบ · AURA OFFICE AI`), security headers, no `X-Powered-By`, `/api/*` proxy → backend |
+| `scripts/smoke-test.sh` against standalone build + local backend | ❌ stops at readiness 503 (expected: no PostgreSQL/Redis/MinIO) — liveness, page and proxy checks pass when run individually |
+| Global git excludes | ✅ `CLAUDE.md`, `AGENTS.md`, `.claude/` ignored by `~/.gitignore_global`; all 9 `docs/*.md` tracked; no `.env` exists or is tracked |
+
+### Phase 1 acceptance criteria (actual)
+| Criterion | Status |
+| --- | --- |
+| Development environment starts with Docker Compose | ❌ not verified (no Docker) |
+| Frontend can load | ✅ (`next dev` and standalone build) |
+| Backend can start | ✅ (local uvicorn) |
+| Database connection works | ❌ not verified (no PostgreSQL) |
+| Redis connection works | ❌ not verified (no Redis) |
+| MinIO can start | ❌ not verified (no Docker) |
+| Health endpoints work | ✅ (live 200; readiness reports failures correctly with 503) |
+| Environment variables documented | ✅ `.env.example` |
+| Basic test suite runs | ✅ backend 24 passed / 2 skipped; frontend 12 passed |
+| README contains setup instructions | ✅ |
+
+**Phase 1 is not accepted yet. Phase 2 must not start** until Docker is available and the four ❌
+criteria plus integration tests, Celery round trip and smoke test pass.
 
 ## Known Issues
 1. **Docker-based acceptance criteria unverified.** Docker, PostgreSQL and Redis are not installed
