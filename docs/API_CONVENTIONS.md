@@ -118,6 +118,11 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `PUT /roles/{id}/permissions` | `roles:manage` | cannot grant what you do not hold; `ADMIN` is locked |
 | `DELETE /roles/{id}` | `roles:manage` | custom, unassigned roles only |
 | `GET /audit-logs` | `audit:read` | filters `action`, `actor_id`, `entity_type`, `entity_id`, `occurred_from`, `occurred_to` |
+| `GET /dashboard/summary` | signed in | personal sections always; `documents` needs `documents:read` (ACL-counted), `organization` needs `users:read`, `security` needs `audit:read` — otherwise `null`. Days are grouped in `APP_TIMEZONE` (Phase 3) |
+| `GET /notifications` | signed in (own only) | `page`, `page_size` (≤100, default 20), `unread_only`; response adds `unread_count` |
+| `GET /notifications/unread-count` | signed in (own only) | `{unread_count}` |
+| `POST /notifications/{id}/read` | signed in + CSRF | idempotent; `404` for someone else's notification |
+| `POST /notifications/read-all` | signed in + CSRF | `{updated, unread_count}` |
 | `GET /health/live`, `GET /health` | — | see below |
 
 ## Health endpoints (Phase 1)

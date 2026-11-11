@@ -30,6 +30,14 @@ cannot perform, but every API independently authenticates and authorises.
 - Record guard: services check ownership/scope (e.g. a manager may only manage
   tasks of their own department unless they hold `tasks:manage_all`).
 - Unknown/absent permission ⇒ deny. Deny by default everywhere.
+- Aggregates follow the same rules as the detailed data (Phase 3): `GET /dashboard/summary`
+  returns a section only when the caller holds the permission that guards the equivalent
+  detail API (`documents:read` + the ACL predicate, `users:read`, `audit:read`); otherwise
+  the section is `null`. Activity feeds expose action, time, actor name and entity type only
+  — never IP addresses, user agents or audit metadata.
+- Notifications are owner-only: every query filters by the caller's id, other users'
+  notifications answer `404` (administrators included). Links are relative in-app paths,
+  enforced by a database `CHECK`, the service and the client.
 
 ### Initial permission catalogue
 

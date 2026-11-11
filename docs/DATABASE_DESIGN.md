@@ -22,9 +22,9 @@ source of truth once written).
 Migration `0001` enables extensions: `vector`, `pg_trgm`. (`gen_random_uuid()`
 is built into PostgreSQL ≥ 13.)
 
-**Implemented so far:** `0001` (extensions) and `0002` (departments, users, roles,
+**Implemented so far:** `0001` (extensions), `0002` (departments, users, roles,
 permissions, user_roles, role_permissions, user_sessions, password_reset_tokens,
-audit_logs, documents core, document_acl). Sections marked *implemented* match the
+audit_logs, documents core, document_acl) and `0003` (notifications). Sections marked *implemented* match the
 migration; the rest is the plan.
 
 ## 2. Identity and access
@@ -188,9 +188,22 @@ expired sessions.
 
 ## 7. Notifications and audit (Phase 2/8)
 
-### `notifications`
-id, user_id FK CASCADE, type, title, body, link_url NULL, entity_type/entity_id
-NULL, read_at NULL, created_at. Index `(user_id, read_at, created_at DESC)`.
+### `notifications` (Phase 3, implemented)
+| column | type | notes |
+| --- | --- | --- |
+| id | uuid PK | |
+| user_id | uuid FK → users ON DELETE CASCADE | the only reader |
+| type | varchar(20) | `SECURITY`, `ACCOUNT`, `SYSTEM` (CHECK); later phases add `TASK`, `TICKET`, … by migration |
+| title | varchar(200) | Thai text written by the backend |
+| body | text | may be empty |
+| link_url | varchar(500) NULL | CHECK: relative in-app path (`/…`, never `//…`) |
+| entity_type / entity_id | varchar(50) / uuid NULL | what the notification is about |
+| read_at | timestamptz NULL | NULL = unread |
+| created_at | timestamptz | |
+
+Indexes: `ix_notifications_user_read_created (user_id, read_at, created_at)` (inbox, newest
+first by backward scan) and partial `ix_notifications_user_unread (user_id) WHERE read_at IS NULL`
+(badge count). Rows are written in the same transaction as the event that caused them.
 
 ### `audit_logs` (Phase 2, implemented)
 | column | type | notes |
