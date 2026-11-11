@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 
@@ -26,6 +27,12 @@ from app.core.config import get_settings
 @lru_cache
 def get_async_engine() -> AsyncEngine:
     settings = get_settings()
+    if settings.database_use_null_pool:
+        return create_async_engine(
+            settings.database_url.get_secret_value(),
+            poolclass=NullPool,
+            echo=settings.database_echo,
+        )
     return create_async_engine(
         settings.database_url.get_secret_value(),
         pool_size=settings.database_pool_size,

@@ -48,10 +48,23 @@ class Settings(BaseSettings):
     api_docs_enabled: bool | None = None  # default: enabled except in production
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
-    # --- Security (used from Phase 2) ------------------------------------------------
+    # --- Security / authentication ---------------------------------------------------
     jwt_secret_key: SecretStr = SecretStr(DEV_JWT_SECRET_PLACEHOLDER)
+    jwt_issuer: str = "aura-office-ai"
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=120)
-    refresh_token_ttl_days: int = Field(default=7, ge=1, le=90)
+    refresh_token_ttl_days: int = Field(default=7, ge=1, le=90)  # idle lifetime
+    refresh_token_absolute_days: int = Field(default=30, ge=1, le=365)  # hard cap per login
+    # A rotated refresh token re-presented within this window (parallel tabs) is rejected
+    # without revoking the session; later re-use is treated as theft and revokes the family.
+    refresh_reuse_grace_seconds: int = Field(default=10, ge=0, le=120)
+    cookie_secure: bool | None = None  # default: Secure cookies except in development/test
+    password_min_length: int = Field(default=12, ge=8, le=128)
+    password_reset_ttl_minutes: int = Field(default=30, ge=5, le=1440)
+    login_rate_limit_attempts: int = Field(default=10, ge=1)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=10)
+    frontend_base_url: str = "http://127.0.0.1:3000"  # used in password-reset links
+    # Password for development seed accounts (`python -m app.cli seed-dev`). Never used in prod.
+    seed_dev_password: SecretStr | None = None
 
     # --- PostgreSQL ------------------------------------------------------------------
     database_url: SecretStr = SecretStr(
@@ -60,6 +73,8 @@ class Settings(BaseSettings):
     database_pool_size: int = Field(default=10, ge=1)
     database_max_overflow: int = Field(default=10, ge=0)
     database_echo: bool = False
+    # NullPool opens a connection per checkout; used by tests that create many event loops.
+    database_use_null_pool: bool = False
 
     # --- Redis / Celery --------------------------------------------------------------
     redis_url: SecretStr = SecretStr("redis://127.0.0.1:6379/0")
@@ -138,6 +153,12 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment in (Environment.PRODUCTION, Environment.STAGING)
+
+    @property
+    def secure_cookies(self) -> bool:
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return self.environment not in (Environment.DEVELOPMENT, Environment.TEST)
 
     @property
     def use_json_logs(self) -> bool:

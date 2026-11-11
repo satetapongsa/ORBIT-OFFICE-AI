@@ -20,6 +20,9 @@ dependencies = [
     "celery[redis]>=5.4",
     "boto3>=1.35",
     "structlog>=24.4",
+    "argon2-cffi>=23.1",
+    "pyjwt>=2.10",
+    "email-validator>=2.2",
 ]
 
 [project.optional-dependencies]
@@ -54,7 +57,7 @@ select = ["E", "W", "F", "I", "B", "UP", "S", "ASYNC", "C4", "SIM", "RUF"]
 ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"]
+"tests/**" = ["S101", "S105", "S106", "S608", "E501"]
 
 [tool.mypy]
 python_version = "3.12"
