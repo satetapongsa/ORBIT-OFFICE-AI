@@ -53,6 +53,8 @@ class AuditAction(StrEnum):
     TASK_ATTACHMENT_DOWNLOADED = "task.attachment_downloaded"
     EMPLOYEE_HR_PROFILE_VIEWED = "employee.hr_profile_viewed"
     EMPLOYEE_HR_PROFILE_UPDATED = "employee.hr_profile_updated"
+    AI_ACTION_CONFIRMED = "ai.action_confirmed"
+    AI_ACTION_REJECTED = "ai.action_rejected"
 
 
 def record(
