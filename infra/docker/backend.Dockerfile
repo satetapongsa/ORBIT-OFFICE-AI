@@ -12,6 +12,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 WORKDIR /app
 RUN groupadd --system aura && useradd --system --gid aura --home-dir /app --no-create-home aura
+# PDF reports (WeasyPrint): Pango/HarfBuzz for correct Thai shaping, plus Thai fonts.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-thai-tlwg \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/pyproject.toml ./pyproject.toml
 # Install dependencies from pyproject.toml without installing the app package itself,
 # so the source tree (copied or bind-mounted at /app) is the only copy of `app`.
