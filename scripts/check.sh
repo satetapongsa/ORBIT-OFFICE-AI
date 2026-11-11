@@ -1,25 +1,44 @@
 #!/usr/bin/env bash
-# Run all static checks and unit tests for backend and frontend.
-# Usage: scripts/check.sh            (from the repository root)
+# Run all static checks and tests for backend and frontend.
+#
+# Usage (from the repository root):
+#   scripts/check.sh                       backend checks with the local venv
+#   CHECK_BACKEND_IN_DOCKER=1 scripts/check.sh
+#                                          backend checks inside the running `backend` container
+#
+# Database-backed tests (auth/RBAC/ACL) need PostgreSQL from `docker compose up -d`;
+# they are skipped with a reason when it is unreachable.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -x "$ROOT/backend/.venv/bin/python" ]]; then
-  PY="$ROOT/backend/.venv/bin/python"
-elif [[ -x "$ROOT/backend/.venv/Scripts/python.exe" ]]; then
-  PY="$ROOT/backend/.venv/Scripts/python.exe"
+backend_in_docker() {
+  (cd "$ROOT" && docker compose exec -T -e PYTHONDONTWRITEBYTECODE=1 \
+    -e AURA_RUN_INTEGRATION="${AURA_RUN_INTEGRATION:-}" backend "$@")
+}
+
+if [[ "${CHECK_BACKEND_IN_DOCKER:-}" == "1" ]]; then
+  run_py() { backend_in_docker python "$@"; }
+  echo "==> backend checks run inside the docker compose 'backend' container"
 else
-  PY="python"
+  if [[ -x "$ROOT/backend/.venv/bin/python" ]]; then
+    PY="$ROOT/backend/.venv/bin/python"
+  elif [[ -x "$ROOT/backend/.venv/Scripts/python.exe" ]]; then
+    PY="$ROOT/backend/.venv/Scripts/python.exe"
+  else
+    PY="python"
+  fi
+  run_py() { (cd "$ROOT/backend" && "$PY" "$@"); }
 fi
 
 echo "==> backend: ruff"
-(cd "$ROOT/backend" && "$PY" -m ruff check . && "$PY" -m ruff format --check .)
+run_py -m ruff check .
+run_py -m ruff format --check .
 echo "==> backend: mypy"
-(cd "$ROOT/backend" && "$PY" -m mypy app)
+run_py -m mypy app
 echo "==> backend: pytest"
-(cd "$ROOT/backend" && "$PY" -m pytest -q)
+run_py -m pytest -q -p no:cacheprovider
 echo "==> backend: alembic offline SQL"
-(cd "$ROOT/backend" && "$PY" -m alembic upgrade head --sql > /dev/null)
+run_py -m alembic upgrade head --sql > /dev/null
 
 echo "==> frontend: lint"
 (cd "$ROOT/frontend" && npm run --silent lint)
