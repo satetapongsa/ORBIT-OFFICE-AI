@@ -1,6 +1,6 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 3 — Dashboard & Application UI — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 4.
+**Current Phase:** Phase 4 — Document Center — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 5.
 **Last Updated:** 2026-11-11
 
 ## Completed
@@ -100,11 +100,48 @@
 - **Fixes found while verifying**: new pages under `app/(app)` need their own
   `instant = false`; the smoke test follows the new `/` redirect.
 
+### Phase 4 — Document Center
+- **Data model** (migration `0004`): `documents.category` (7 categories, CHECK) and
+  `current_version_id`; `document_versions` (number per document, server-generated storage key,
+  original filename, type, MIME, size, SHA-256, uploader, processing status/error, page and
+  character counts); `document_version_texts` (extracted text, 1:1); trigram index on titles;
+  notification type `DOCUMENT`.
+- **Upload pipeline** (ADR-029): size enforced at Nginx (30 MB), the Next dev proxy, an ASGI
+  `Content-Length` middleware and while hashing; content sniffing (PDF magic, OOXML parts,
+  decodable text) must match the extension allow-list; zip-bomb, encrypted-entry and path
+  checks; filenames sanitised; object stored first, DB committed second (object removed on
+  failure), extraction queued after commit.
+- **Extraction worker** (ADR-030): Celery task `documents.extract_text` on the `documents`
+  queue — PDF (pypdf), DOCX (python-docx), XLSX (openpyxl + defusedxml), TXT (UTF-8/16,
+  TIS-620); page/character/cell limits, soft/hard time limits, row lock, idempotent;
+  failures become `FAILED` with a Thai message and a notification to the uploader; manual
+  re-processing for failed/pending versions.
+- **API**: list/search/filter/sort (`q`, category, file type, status, mine), create with first
+  version, detail with capabilities, edit metadata, soft delete, new version, re-process,
+  streamed download (RFC 5987 filename, `nosniff`, audited), text preview (first 50 000
+  characters), ACL read/replace with share notifications, document history, directory lookup
+  `GET /directory/users` (ADR-031). Every read goes through `accessible_documents_condition`;
+  unknown and inaccessible documents both return 404. Capabilities (ADR-028) combine the
+  ACL level with permissions.
+- **Dashboard**: documents section now has my documents, processing/failed counts and the 5
+  most recently updated accessible documents.
+- **Frontend**: `/documents` (search, filters, sort, pagination, upload dialog with drag & drop,
+  client-side type/size checks, auto title), `/documents/[id]` (metadata, versions with
+  status polling every 3 s while processing, download, re-process, text preview, edit, new
+  version, delete, sharing editor with directory search and level per principal, history);
+  dashboard documents card; `DOCUMENT` notifications in the bell and inbox; nav
+  `CURRENT_PHASE = 4`. Dynamic route pattern: server page awaits `params` + `loading.tsx` (ADR-032).
+- **Fixes found while verifying**: the frontend notification schema rejected `DOCUMENT`
+  (dashboard failed to load after a processing failure) → enum extended + regression test;
+  the Next dev proxy cut request bodies at 10 MB (plain-text 500) →
+  `experimental.proxyClientMaxBodySize: "30mb"`; `/documents/[id]` failed `next build`
+  until params were awaited on the server.
+
 ## In Progress
-- Nothing. Phase 3 is complete.
+- Nothing. Phase 4 is complete.
 
 ## Remaining
-- Phases 4–9 per `docs/DEVELOPMENT_PHASES.md`.
+- Phases 5–9 per `docs/DEVELOPMENT_PHASES.md`.
 - User/role administration UI (APIs done) — planned with the Employee Center (Phase 5).
 - E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
 
@@ -118,9 +155,35 @@ rotating refresh-token families (ADR-016); CSRF double-submit (ADR-017); grant-o
 (ADR-018); ACL foundation in Phase 2 (ADR-019); isolated test database (ADR-020); client-side
 session gate (ADR-021); notification inbox in Phase 3 (ADR-023); permission-gated dashboard
 summary (ADR-024); business time zone (ADR-025); charts without a library (ADR-026);
-dashboard as home page (ADR-027).
+dashboard as home page (ADR-027); document capabilities = ACL level × permissions (ADR-028);
+upload pipeline with content sniffing and store-then-commit (ADR-029); text extraction in the
+worker (ADR-030); directory lookup for sharing (ADR-031); dynamic route pattern (ADR-032).
 
 ## Tests
+### Phase 4 verification — 2026-11-11
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (84 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **163 passed**, 1 skipped (Windows-only event-loop test) |
+| — `tests/api/test_documents.py` | ✅ 26: 401/403, upload of all four types + extraction, spoofed/unsupported/empty/oversized/zip-bomb files, storage cleanup on DB failure, list visibility per role and ACL, search/filter/sort, 404 for inaccessible documents, capabilities, edit/visibility rules, new version, re-process rules, download + audit, text preview, ACL replace validation + notifications + escalation, history permissions, soft delete, directory lookup |
+| — `tests/unit/test_document_files.py` | ✅ sniffing, filename sanitising, text decoding, zip checks |
+| `alembic upgrade head` / `alembic check` / `downgrade 0003` + `upgrade` | ✅ `0004 (head)`, no drift, round trip ok |
+| Frontend `vitest` | ✅ **45 passed** (new: documents list/filters, upload validation, detail capabilities, sharing editor, DOCUMENT notifications on the dashboard) |
+| Frontend lint, typecheck, Prettier, `next build` | ✅ (`/documents` prerendered, `/documents/[id]` partial prerender) |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Browser (Docker stack with the real worker) | ✅ employee uploads a Thai TXT → title filled from the filename → PENDING → READY → text preview; download keeps the Thai filename; shared VIEW with a manager via directory search → manager notified; history lists upload/share/download; corrupt PDF → FAILED with a Thai message + notification; `.exe` → 415; 15 MB upload → 201 and READY (text capped at 2 000 000 characters); 36 MB → 413; 375 px: no horizontal overflow on list, detail and dashboard |
+
+### Phase 4 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Users can upload, list, search, filter and download documents they may access | ✅ API tests + browser |
+| Files are validated (type sniffing, size) and stored in MinIO | ✅ unit + API tests, integration storage round trip, browser 415/413 |
+| Text is extracted asynchronously with a visible processing status | ✅ worker in browser run, status polling, FAILED path with notification |
+| Versions, metadata and categories work | ✅ tests + browser |
+| ACL can be managed from the UI and is enforced on every read | ✅ ACL tests (404 for inaccessible), sharing editor in browser |
+| Document actions are audited and visible in history | ✅ tests + browser |
+
 ### Phase 3 verification — 2026-11-11
 Backend checks ran inside the backend container (Python 3.13), as in Phase 2.
 
@@ -263,12 +326,15 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
     revisit with analytics in Phase 8). Dark mode is not wired (no theme provider), so only
     the light chart palette is in use.
 12. Notifications are in-app only (no e-mail) and have no per-user preferences yet (Phase 8).
+13. No OCR: scanned (image-only) PDFs finish `READY` with 0 characters; the UI says so.
+14. Objects of soft-deleted documents stay in storage; a purge job is planned for Phase 9.
+15. Uploads are not scanned by an antivirus engine (type sniffing and zip checks only).
+16. The Celery worker does not auto-reload; restart it after backend changes
+    (`docker compose restart worker`).
+17. Document search is `ILIKE` on title/description; content search arrives with RAG (Phase 7).
 
 ## Next Phase
-**Phase 4 — Document Center**: upload/download/list/search/filter, categories, metadata,
-versions, ACL management UI, MinIO storage, file validation (type sniffing, size), async text
-extraction (PDF, DOCX, XLSX, TXT), processing status, document audit history — every read
-path through `accessible_documents_condition`.
+**Phase 5 — Task Management & Employee Center**: see `docs/DEVELOPMENT_PHASES.md`.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -281,7 +347,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 4 — DOCUMENT CENTER as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 5 — TASK MANAGEMENT & EMPLOYEE CENTER as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)
