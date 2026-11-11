@@ -86,7 +86,8 @@ services:
 
   migrate:
     <<: *backend
-    command: ["alembic", "upgrade", "head"]
+    # Migrations, then the permission catalogue / system roles (idempotent, safe every start).
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli sync-rbac"]
     depends_on:
       postgres:
         condition: service_healthy
