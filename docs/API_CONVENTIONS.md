@@ -146,6 +146,12 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `GET /employees/{id}` | `employees:read_directory` | directory fields + department manager + `account` (with `users:read`, else `null`) + `capabilities`; inactive people `404` without `users:read` |
 | `GET /employees/{id}/hr` | yourself, or `employees:read_sensitive` | HR record (`exists: false` when empty); reads by others are audited |
 | `PUT /employees/{id}/hr` | `employees:manage` + `employees:read_sensitive` | full replacement; national ID last 4 digits only; audit keeps field names, never values |
+| `GET /ai/status` | `ai:chat` | `{enabled, provider, model, tools[{name, label, requires_confirmation}], max_message_chars}` — tools are those the caller may use (`ai:use_tools` + each tool's permission) |
+| `GET /ai/sessions`, `POST /ai/sessions` | `ai:chat` (own only) | newest first; `page`, `page_size` ≤ 100 |
+| `GET`/`PATCH`/`DELETE /ai/sessions/{id}` | `ai:chat` (own only) | detail = messages (tool messages carry a Thai label and `tool_ok`, never raw tool data) + actions; delete is soft; others' sessions `404` |
+| `POST /ai/sessions/{id}/messages` | `ai:chat` (+ `ai:use_tools` for tools) | body `{content}` (1–4000 chars); answer is `text/event-stream` with events `start`, `delta`, `tool`, `action`, `done`, `error`; `503 ai_not_configured` without a provider; `429` above `AI_CHAT_RATE_LIMIT_MESSAGES` per window |
+| `POST /ai/actions/{id}/confirm` | `ai:chat` + `ai:use_tools` + the tool's permission (own only) | re-validates and runs the proposed change as the user; `EXECUTED` / `FAILED`; `409` if already decided or expired |
+| `POST /ai/actions/{id}/reject` | `ai:chat` (own only) | `REJECTED`; nothing changes |
 | `GET /notifications` | signed in (own only) | `page`, `page_size` (≤100, default 20), `unread_only`; response adds `unread_count` |
 | `GET /notifications/unread-count` | signed in (own only) | `{unread_count}` |
 | `POST /notifications/{id}/read` | signed in + CSRF | idempotent; `404` for someone else's notification |

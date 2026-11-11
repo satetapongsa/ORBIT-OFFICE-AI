@@ -193,16 +193,17 @@ Indexes: `(status, due_at)` for overdue queries, `tasks(department_id)`, `tasks(
 `task_comments(task_id, created_at)`, `task_events(task_id, created_at)`. Visibility is the
 single predicate `app/repositories/task_access.visible_tasks_condition` (ADR-033).
 
-## 5. AI assistant (Phase 6)
+## 5. AI assistant (Phase 6, implemented — migration `0006`)
 
 | table | key columns |
 | --- | --- |
-| `chat_sessions` | id, user_id FK CASCADE, title, created_at, updated_at, deleted_at NULL |
-| `chat_messages` | id, session_id FK CASCADE, role (`user`,`assistant`,`tool`,`system`), content, citations JSONB (doc id, version id, chunk id, page, title), tool_name NULL, tool_payload JSONB NULL, provider, model, input_tokens, output_tokens, created_at |
-| `ai_action_requests` | id, session_id FK, message_id FK NULL, user_id FK, tool_name, arguments JSONB (validated), status (`PENDING`,`CONFIRMED`,`REJECTED`,`EXECUTED`,`FAILED`,`EXPIRED`), result JSONB NULL, expires_at, decided_at, executed_at |
+| `chat_sessions` | id, user_id FK CASCADE, title (200), last_message_at, created_at, updated_at, deleted_at NULL — index `(user_id, last_message_at)` |
+| `chat_messages` | id, session_id FK CASCADE, role (`user`,`assistant`,`tool`,`system`, CHECK), content, tool_calls JSONB NULL (neutral `[{id, name, arguments}]`), tool_call_id, tool_name, action_id FK → ai_action_requests SET NULL, provider_payload JSONB NULL (the provider's own assistant content, replayed unchanged), provider, model, input_tokens, output_tokens, created_at (set by the app, strictly increasing within a turn) — index `(session_id, created_at)` |
+| `ai_action_requests` | id, session_id FK CASCADE, user_id FK CASCADE, tool_name, tool_call_id, arguments JSONB (validated), summary (Thai), status (`PENDING`,`REJECTED`,`EXECUTED`,`FAILED`,`EXPIRED`, CHECK), result JSONB NULL, error NULL, expires_at, decided_at, executed_at, created_at |
 
-Retention: configurable (`AI_CHAT_RETENTION_DAYS`); a periodic worker purges
-expired sessions.
+`system` messages are application notes appended when the user confirms or rejects an action
+(the history is append-only). Citations arrive with RAG in Phase 7.
+Retention: `AI_CHAT_RETENTION_DAYS` is configured but the purge job is Phase 9.
 
 ## 6. Helpdesk (Phase 8)
 

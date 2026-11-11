@@ -193,6 +193,30 @@ descriptions are plain text in the UI (never HTML).
 - Provider errors are mapped to `ai_provider_error` without leaking provider
   response bodies or keys.
 
+### Implemented in Phase 6
+- Chats, messages and actions are owner-only (`404` for anyone else, administrators
+  included). `ai:chat` is required for every `/ai` endpoint; tools are offered only with
+  `ai:use_tools` **and** each tool's own permission, and an unoffered tool name is answered
+  with an error.
+- Tools (`app/services/ai/tools.py`): `get_my_tasks`, `get_task_details`, `find_colleagues`
+  (read-only) and `create_task`, `update_task_status` (mutating). Arguments are validated with
+  strict Pydantic models (`extra="forbid"`); tools call the same services and visibility
+  predicates as the HTTP API **as the signed-in user**, so a hidden task is "not found" to the
+  model as well.
+- Mutating tools only create a `PENDING` `ai_action_requests` row (TTL
+  `AI_ACTION_TTL_MINUTES`); the model is told nothing has changed. Confirmation re-checks the
+  permissions and runs the service; the row is marked `EXECUTED` in the same transaction as
+  the change, so it can never run twice. Events: `ai.action_confirmed`, `ai.action_rejected`
+  (plus the normal `task.*` events with the user as actor).
+- The system prompt states that tool results and stored text are data, not instructions; the
+  UI renders model output as plain text (only standalone in-app `/tasks|/documents|/employees/<uuid>`
+  paths become links). Tool results are never sent to the browser.
+- Limits: 4,000 characters per message, `AI_CHAT_RATE_LIMIT_MESSAGES` per
+  `AI_CHAT_RATE_LIMIT_WINDOW_SECONDS` per user, `AI_CHAT_MAX_TOOL_STEPS` tool rounds per
+  message, 20,000 characters per tool result, last `AI_CHAT_HISTORY_MESSAGES` messages sent.
+- Provider keys are read from settings only, never logged; provider errors log status and
+  request id, never bodies.
+
 ## 6. Transport and HTTP hardening
 
 - HTTPS terminated at Nginx in production (HSTS, TLS 1.2+).
@@ -230,8 +254,10 @@ Task events (Phase 5): `task.created`, `task.updated`, `task.status_changed`,
 `task.attachment_downloaded`. Employee events: `employee.hr_profile_viewed`,
 `employee.hr_profile_updated` (field names only).
 
-Planned events (later phases): ticket status changes, AI action confirmations, system
-configuration changes.
+AI events (Phase 6): `ai.action_confirmed` (including failed and no-op runs),
+`ai.action_rejected`.
+
+Planned events (later phases): ticket status changes, system configuration changes.
 Every entry stores actor, IP, user agent and request ID.
 
 ## 9. Reporting a vulnerability
