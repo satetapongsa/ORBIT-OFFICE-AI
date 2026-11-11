@@ -1,17 +1,38 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { MAIN_NAV, isNavItemActive } from "@/lib/navigation";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
 
+let permissions = new Set<string>();
+vi.mock("@/features/auth/hooks/use-session", () => ({
+  useSession: () => ({ has: (p: string) => permissions.has(p) }),
+}));
+
+const ALL = MAIN_NAV.map((i) => i.permission).filter((p): p is string => p !== null);
+
 describe("SidebarNav", () => {
-  it("renders every module with its Thai label", () => {
+  beforeEach(() => {
+    permissions = new Set(ALL);
+  });
+
+  it("renders every permitted module with its Thai label", () => {
     render(<SidebarNav />);
     for (const item of MAIN_NAV) {
       expect(screen.getByTestId(`nav-${item.key}`)).toHaveTextContent(item.label);
     }
+  });
+
+  it("hides modules the user has no permission for", () => {
+    permissions = new Set(["documents:read"]);
+    render(<SidebarNav />);
+    expect(screen.getByTestId("nav-documents")).toBeInTheDocument();
+    expect(screen.getByTestId("nav-dashboard")).toBeInTheDocument(); // no permission required
+    expect(screen.queryByTestId("nav-assistant")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-employees")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-settings")).not.toBeInTheDocument();
   });
 
   it("does not render links for modules that are not implemented yet", () => {
