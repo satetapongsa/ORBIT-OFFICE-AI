@@ -19,6 +19,7 @@ class NotificationType(StrEnum):
     SECURITY = "SECURITY"  # password changes, suspicious session activity
     ACCOUNT = "ACCOUNT"  # account created/updated, roles changed
     SYSTEM = "SYSTEM"  # announcements from the system itself
+    DOCUMENT = "DOCUMENT"  # shared with you, processing failed
 
 
 class Notification(UUIDPrimaryKeyMixin, Base):
