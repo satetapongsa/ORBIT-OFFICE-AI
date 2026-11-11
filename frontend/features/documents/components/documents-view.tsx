@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, FileSearch, FileText, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileSearch, FileText, Search, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/features/auth/hooks/use-session";
+import { ContentSearchResults } from "@/features/documents/components/content-search-results";
 import { ProcessingBadge } from "@/features/documents/components/processing-badge";
 import { UploadDialog } from "@/features/documents/components/upload-dialog";
 import { useDocumentList } from "@/features/documents/hooks/use-documents";
@@ -101,6 +102,7 @@ export function DocumentsView() {
   const [category, setCategory] = useState<DocumentCategory | "">("");
   const [visibility, setVisibility] = useState<DocumentVisibility | "">("");
   const [mine, setMine] = useState(false);
+  const [inContent, setInContent] = useState(false);
   const [sort, setSort] = useState<NonNullable<DocumentListParams["sort"]>>("updated");
   const [page, setPage] = useState(1);
   const q = useDebounced(search.trim());
@@ -129,7 +131,7 @@ export function DocumentsView() {
 
       <div
         role="search"
-        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_10rem_9rem_auto] lg:items-end"
+        className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_11rem_10rem_9rem_auto_auto] lg:items-end"
       >
         <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
           <Label htmlFor={ids.q}>ค้นหา</Label>
@@ -141,7 +143,7 @@ export function DocumentsView() {
             <Input
               id={ids.q}
               type="search"
-              placeholder="ชื่อหรือคำอธิบายเอกสาร"
+              placeholder={inContent ? "ถามหรือค้นหาข้อความในเอกสาร" : "ชื่อหรือคำอธิบายเอกสาร"}
               className="pl-8"
               value={search}
               maxLength={200}
@@ -202,6 +204,15 @@ export function DocumentsView() {
         </div>
         <Button
           type="button"
+          variant={inContent ? "default" : "outline"}
+          aria-pressed={inContent}
+          onClick={() => setInContent((v) => !v)}
+        >
+          <Sparkles aria-hidden />
+          ค้นหาในเนื้อหา
+        </Button>
+        <Button
+          type="button"
           variant={mine ? "default" : "outline"}
           aria-pressed={mine}
           onClick={() => {
@@ -213,7 +224,9 @@ export function DocumentsView() {
         </Button>
       </div>
 
-      {list.isPending ? (
+      {inContent ? (
+        <ContentSearchResults query={q} />
+      ) : list.isPending ? (
         <Card>
           <CardContent className="space-y-3" aria-busy="true" aria-label="กำลังโหลดรายการเอกสาร">
             {Array.from({ length: 5 }, (_, i) => (
@@ -264,7 +277,7 @@ export function DocumentsView() {
         </Card>
       )}
 
-      {list.data && list.data.total > 0 ? (
+      {!inContent && list.data && list.data.total > 0 ? (
         <nav
           aria-label="เลื่อนหน้า"
           className="mt-4 flex items-center justify-between gap-2 text-sm"

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { AssistantView } from "@/features/assistant/components/assistant-view";
 
@@ -8,5 +9,10 @@ export const instant = false;
 export const metadata: Metadata = { title: "ผู้ช่วย AI" };
 
 export default function AssistantPage() {
-  return <AssistantView />;
+  // useSearchParams (prompt pre-fill) needs a Suspense boundary.
+  return (
+    <Suspense>
+      <AssistantView />
+    </Suspense>
+  );
 }

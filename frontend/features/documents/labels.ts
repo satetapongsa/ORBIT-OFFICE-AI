@@ -3,6 +3,7 @@ import type {
   DocumentCategory,
   DocumentStatus,
   DocumentVisibility,
+  IndexStatus,
   PrincipalType,
   ProcessingStatus,
 } from "@/services/documents";
@@ -35,6 +36,14 @@ export const PROCESSING_LABELS: Record<ProcessingStatus, string> = {
   PROCESSING: "กำลังประมวลผล",
   READY: "พร้อมใช้งาน",
   FAILED: "ประมวลผลไม่สำเร็จ",
+};
+
+export const INDEX_LABELS: Record<IndexStatus, string> = {
+  PENDING: "รอสร้างดัชนีค้นหา",
+  INDEXING: "กำลังสร้างดัชนีค้นหา",
+  READY: "ค้นหาในเนื้อหาได้",
+  FAILED: "ค้นหาได้เฉพาะตามคำ",
+  SKIPPED: "ไม่มีข้อความให้ค้นหา",
 };
 
 export const ACCESS_LABELS: Record<AccessLevel, string> = {

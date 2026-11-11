@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Download, FileQuestion, Loader2, RotateCw } from "lucide-react";
+import { ArrowLeft, Download, FileQuestion, Loader2, RotateCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSession } from "@/features/auth/hooks/use-session";
 import { AclEditor } from "@/features/documents/components/acl-editor";
 import {
   DeleteDocumentDialog,
@@ -29,6 +30,7 @@ import {
   ACCESS_LABELS,
   CATEGORY_LABELS,
   DOCUMENT_ACTION_LABELS,
+  INDEX_LABELS,
   STATUS_LABELS,
   VISIBILITY_LABELS,
   formatBytes,
@@ -165,6 +167,15 @@ function Versions({ doc }: { doc: DocumentDetail }) {
                 </p>
               </div>
               <ProcessingBadge status={v.processing_status} />
+              {v.processing_status === "READY" ? (
+                <span
+                  className="text-muted-foreground text-xs"
+                  data-testid="index-status"
+                  title={v.index_error ?? undefined}
+                >
+                  {INDEX_LABELS[v.index_status]}
+                </span>
+              ) : null}
               <Button
                 variant="ghost"
                 size="sm"
@@ -280,7 +291,9 @@ export function DocumentDetailView({ id }: { id: string }) {
 
 function DocumentDetailContent({ doc }: { doc: DocumentDetail }) {
   const download = useDownload(doc);
+  const { has } = useSession();
   const caps = doc.capabilities;
+  const summarise = `สรุปเอกสาร “${doc.title}” (รหัสเอกสาร ${doc.id}) ให้หน่อย`;
   return (
     <div className="space-y-6">
       <div className="space-y-3">
@@ -319,6 +332,14 @@ function DocumentDetailContent({ doc }: { doc: DocumentDetail }) {
                   <Download aria-hidden />
                 )}
                 ดาวน์โหลด
+              </Button>
+            ) : null}
+            {has("ai:chat") && doc.current_version?.processing_status === "READY" ? (
+              <Button asChild variant="outline">
+                <Link href={`/assistant?prompt=${encodeURIComponent(summarise)}`}>
+                  <Sparkles aria-hidden />
+                  สรุปด้วยผู้ช่วย AI
+                </Link>
               </Button>
             ) : null}
             {caps.can_upload_version ? <NewVersionDialog doc={doc} /> : null}

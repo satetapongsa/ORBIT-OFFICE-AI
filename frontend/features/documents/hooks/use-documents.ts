@@ -16,6 +16,7 @@ import {
   replaceDocumentAcl,
   reprocessVersion,
   searchDirectory,
+  searchDocumentContent,
   updateDocument,
   uploadDocument,
   uploadVersion,
@@ -85,6 +86,15 @@ export function useDocumentHistory(id: string, enabled: boolean) {
     queryKey: documentQueryKeys.history(id),
     queryFn: ({ signal }) => getDocumentHistory(id, signal),
     enabled,
+  });
+}
+
+export function useContentSearch(q: string) {
+  return useQuery({
+    queryKey: documentQueryKeys.content(q),
+    queryFn: ({ signal }) => searchDocumentContent(q, signal),
+    enabled: q.length > 0,
+    staleTime: 30_000,
   });
 }
 

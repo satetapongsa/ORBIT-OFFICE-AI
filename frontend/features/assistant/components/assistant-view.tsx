@@ -11,6 +11,8 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { toast } from "sonner";
 
@@ -45,12 +47,12 @@ import {
 } from "@/features/assistant/hooks/use-assistant";
 import { formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { AiAction, ChatMessage, ChatSession } from "@/services/ai";
+import type { AiAction, ChatMessage, ChatSession, Citation } from "@/services/ai";
 import { ApiError } from "@/services/api-client";
 
 const SUGGESTIONS = [
   "งานของฉันที่ใกล้ครบกำหนดมีอะไรบ้าง",
-  "มีงานไหนเลยกำหนดแล้วบ้าง",
+  "นโยบายการลาพักร้อนของบริษัทเป็นอย่างไร",
   "สร้างงาน “เตรียมรายงานประจำเดือน” กำหนดส่งวันศุกร์นี้",
 ];
 
@@ -64,7 +66,34 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
-function AssistantBubble({ text, streaming }: { text: string; streaming?: boolean }) {
+function Sources({ citations }: { citations: Citation[] }) {
+  return (
+    <div className="mt-2 border-t pt-2" data-testid="chat-sources">
+      <p className="text-muted-foreground text-xs font-medium">แหล่งอ้างอิง</p>
+      <ol className="mt-1 space-y-0.5 text-xs">
+        {citations.map((c) => (
+          <li key={c.n}>
+            <span className="text-muted-foreground">[{c.n}] </span>
+            <Link href={`/documents/${c.document_id}`} className="text-primary hover:underline">
+              {c.title}
+            </Link>
+            {c.page ? <span className="text-muted-foreground"> · หน้า {c.page}</span> : null}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function AssistantBubble({
+  text,
+  streaming,
+  citations = [],
+}: {
+  text: string;
+  streaming?: boolean;
+  citations?: Citation[];
+}) {
   return (
     <div className="flex gap-2" data-testid="chat-assistant">
       <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-full">
@@ -72,6 +101,7 @@ function AssistantBubble({ text, streaming }: { text: string; streaming?: boolea
       </span>
       <div className="bg-muted/60 max-w-[85%] min-w-0 rounded-2xl rounded-tl-sm px-4 py-2">
         {text ? <MessageText text={text} /> : null}
+        {citations.length > 0 ? <Sources citations={citations} /> : null}
         {streaming ? (
           <span
             className="text-muted-foreground inline-flex items-center gap-1 text-xs"
@@ -113,7 +143,9 @@ function StoredMessage({
   sessionId: string;
 }) {
   if (message.role === "user") return <UserBubble text={message.content} />;
-  if (message.role === "assistant") return <AssistantBubble text={message.content} />;
+  if (message.role === "assistant") {
+    return <AssistantBubble text={message.content} citations={message.citations} />;
+  }
   if (message.role === "system") {
     return (
       <div
@@ -261,7 +293,9 @@ export function AssistantView() {
   const sessions = useChatSessions();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
-  const [draft, setDraft] = useState("");
+  const params = useSearchParams();
+  // "สรุปด้วยผู้ช่วย AI" links pre-fill the composer; nothing is sent until the user does.
+  const [draft, setDraft] = useState(() => (params.get("prompt") ?? "").slice(0, 4000));
   const detail = useChatSession(activeId);
   const chat = useChatStream(activeId, setActiveId);
   const endRef = useRef<HTMLDivElement>(null);
