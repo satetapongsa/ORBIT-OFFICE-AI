@@ -13,6 +13,8 @@ const backendUrl = (process.env.BACKEND_INTERNAL_URL ?? "http://127.0.0.1:8000")
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // The dev server only trusts `localhost` by default; local URLs use 127.0.0.1 (ADR-015).
+  allowedDevOrigins: ["127.0.0.1"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

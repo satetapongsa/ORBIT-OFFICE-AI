@@ -1,4 +1,5 @@
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { UserMenu } from "@/features/auth/components/user-menu";
 import { SystemStatusIndicator } from "@/features/system-status/components/system-status-indicator";
 
 export function AppHeader() {
@@ -7,6 +8,7 @@ export function AppHeader() {
       <MobileNav />
       <div className="flex-1" />
       <SystemStatusIndicator />
+      <UserMenu />
     </header>
   );
 }
