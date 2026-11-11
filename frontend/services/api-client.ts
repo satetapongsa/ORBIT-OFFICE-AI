@@ -197,6 +197,23 @@ async function toApiError(response: Response): Promise<ApiError> {
   });
 }
 
+/**
+ * POST and return the raw streaming response (e.g. server-sent events), with the same CSRF,
+ * refresh-and-retry and error-envelope handling as {@link apiRequest}.
+ */
+export async function apiStream(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const response = await sendWithRefresh(path, "POST", body, undefined, signal);
+  if (!response.ok) throw await toApiError(response);
+  if (!response.body) {
+    throw new ApiError({ status: 0, code: "network_error", message: NETWORK_ERROR_MESSAGE });
+  }
+  return response;
+}
+
 /** Filename from `Content-Disposition` (prefers the RFC 5987 UTF-8 form). */
 export function filenameFromDisposition(header: string | null, fallback: string): string {
   if (!header) return fallback;
