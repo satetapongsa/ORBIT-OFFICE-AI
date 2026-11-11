@@ -103,3 +103,17 @@ async def can_access_document(
         )
     )
     return bool(await session.scalar(stmt))
+
+
+async def effective_access_level(
+    session: AsyncSession, user: CurrentUser, document_id: uuid.UUID
+) -> AccessLevel | None:
+    """Highest level ``user`` holds on the document, or ``None`` (no access / not found).
+
+    Evaluated with :func:`accessible_documents_condition` for each level, so it can never
+    disagree with listings, downloads or retrieval.
+    """
+    for level in (AccessLevel.MANAGE, AccessLevel.EDIT, AccessLevel.VIEW):
+        if await can_access_document(session, user, document_id, level):
+            return level
+    return None
