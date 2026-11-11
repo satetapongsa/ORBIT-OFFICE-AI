@@ -12,7 +12,10 @@ import { createWrapper, json, mockApi } from "./fixtures";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/assistant",
+  useSearchParams: () => searchParams,
 }));
+
+let searchParams = new URLSearchParams();
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const TASK_ID = "0b6f2b5e-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
@@ -56,12 +59,14 @@ const stored = (a: AiAction): ChatSessionDetail => ({
     {
       id: "m-1",
       role: "user",
+      citations: [],
       content: "สร้างงานทำรายงานให้หน่อย",
       created_at: "2026-11-11T05:00:00Z",
     },
     {
       id: "m-2",
       role: "tool",
+      citations: [],
       content: "",
       tool_name: "create_task",
       tool_label: "เตรียมสร้างงาน",
@@ -72,6 +77,7 @@ const stored = (a: AiAction): ChatSessionDetail => ({
     {
       id: "m-3",
       role: "assistant",
+      citations: [],
       content: "เตรียมงานไว้แล้ว กรุณากดยืนยัน",
       created_at: "2026-11-11T05:00:02Z",
     },
@@ -86,6 +92,7 @@ function sse(events: [string, unknown][]): Response {
 
 beforeEach(() => {
   document.cookie = "aura_csrf=csrf-token; path=/";
+  searchParams = new URLSearchParams();
 });
 
 describe("helpers", () => {
@@ -203,7 +210,13 @@ describe("AssistantView", () => {
         json({
           ...session,
           messages: [
-            { id: "m-1", role: "user", content: "สวัสดี", created_at: "2026-11-11T05:00:00Z" },
+            {
+              id: "m-1",
+              role: "user",
+              citations: [],
+              content: "สวัสดี",
+              created_at: "2026-11-11T05:00:00Z",
+            },
           ],
           actions: [],
         }),
@@ -231,3 +244,54 @@ describe("AssistantView", () => {
 });
 
 const SUGGESTION = "งานของฉันที่ใกล้ครบกำหนดมีอะไรบ้าง";
+
+describe("AssistantView citations and pre-fill", () => {
+  it("lists the sources an answer cites", async () => {
+    mockApi({
+      "GET /api/v1/ai/status": () => json(status()),
+      "GET /api/v1/ai/sessions": () => json({ items: [session], total: 1, page: 1, page_size: 50 }),
+      "GET /api/v1/ai/sessions/s-1": () =>
+        json({
+          ...session,
+          messages: [
+            {
+              id: "m-1",
+              role: "user",
+              citations: [],
+              content: "ลาพักร้อนได้กี่วัน",
+              created_at: "2026-11-11T05:00:00Z",
+            },
+            {
+              id: "m-2",
+              role: "assistant",
+              content: "ลาพักร้อนได้ปีละ 10 วันทำการ [1]",
+              citations: [{ n: 1, document_id: TASK_ID, title: "นโยบายการลา", page: 3 }],
+              created_at: "2026-11-11T05:00:01Z",
+            },
+          ],
+          actions: [],
+        }),
+    });
+    render(<AssistantView />, { wrapper: createWrapper() });
+    await userEvent.click(await screen.findByRole("button", { name: /^สร้างงานให้หน่อย/ }));
+    const sources = await screen.findByTestId("chat-sources");
+    expect(within(sources).getByRole("link", { name: "นโยบายการลา" })).toHaveAttribute(
+      "href",
+      `/documents/${TASK_ID}`,
+    );
+    expect(sources).toHaveTextContent("[1] นโยบายการลา · หน้า 3");
+  });
+
+  it("pre-fills the composer from ?prompt= without sending", async () => {
+    searchParams = new URLSearchParams({ prompt: "สรุปเอกสาร “นโยบายการลา” ให้หน่อย" });
+    const fetchMock = mockApi({
+      "GET /api/v1/ai/status": () => json(status()),
+      "GET /api/v1/ai/sessions": () => json({ items: [], total: 0, page: 1, page_size: 50 }),
+    });
+    render(<AssistantView />, { wrapper: createWrapper() });
+    expect(await screen.findByLabelText("ข้อความถึงผู้ช่วย AI")).toHaveValue(
+      "สรุปเอกสาร “นโยบายการลา” ให้หน่อย",
+    );
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+});

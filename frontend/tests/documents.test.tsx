@@ -43,6 +43,7 @@ const listItem = (overrides: Partial<DocumentListItem> = {}): DocumentListItem =
     file_type: "PDF",
     size_bytes: 2048,
     processing_status: "READY",
+    index_status: "READY",
   },
   created_at: "2026-11-11T05:00:00Z",
   updated_at: "2026-11-11T05:00:00Z",
@@ -68,6 +69,10 @@ const detail = (overrides: Partial<DocumentDetail> = {}): DocumentDetail => ({
       file_type: "PDF",
       size_bytes: 2048,
       processing_status: "READY",
+      index_status: "READY",
+      index_error: null,
+      chunk_count: 1,
+      indexed_at: "2026-11-11T05:00:06Z",
       mime_type: "application/pdf",
       sha256: "abc",
       uploaded_by: { id: "u-owner", display_name: "เอกชัย พนักงาน" },
@@ -227,6 +232,7 @@ describe("DocumentDetailView", () => {
 
     const text = await screen.findByTestId("document-text");
     expect(text).toHaveTextContent('<img src=x onerror="alert(1)"> วันลา 10 วัน');
+    expect(screen.getByTestId("index-status")).toHaveTextContent("ค้นหาในเนื้อหาได้");
     expect(text.querySelector("img")).toBeNull(); // never interpreted as HTML
     expect(screen.getByRole("button", { name: "แก้ไขข้อมูล" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "อัปโหลดเวอร์ชันใหม่" })).toBeInTheDocument();
@@ -358,5 +364,64 @@ describe("AclEditor", () => {
         entries: [{ principal_type: "USER", principal_id: "u-2", access_level: "EDIT" }],
       }),
     );
+  });
+});
+
+describe("content search", () => {
+  it("searches inside documents and shows matching passages", async () => {
+    const fetchMock = mockApi({
+      "GET /api/v1/documents": () =>
+        json({ items: [listItem()], total: 1, page: 1, page_size: 20 }),
+      "GET /api/v1/documents/search": () =>
+        json({
+          query: "ลาพักร้อน",
+          mode: "hybrid",
+          degraded: false,
+          results: [
+            {
+              document_id: "doc-1",
+              title: "นโยบายการลา",
+              category: "POLICY",
+              version_number: 1,
+              page: 2,
+              snippet: "<b>พนักงาน</b>ลาพักร้อนได้ปีละ 10 วัน",
+              score: 0.82,
+            },
+          ],
+        }),
+    });
+    render(<DocumentsView />, { wrapper: createWrapper() });
+    await screen.findByTestId("document-row");
+    await userEvent.click(screen.getByRole("button", { name: "ค้นหาในเนื้อหา" }));
+    expect(screen.getByText("ค้นหาในเนื้อหาเอกสาร")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("ค้นหา"), "ลาพักร้อน");
+
+    const hit = await screen.findByTestId("content-hit");
+    expect(within(hit).getByRole("link", { name: "นโยบายการลา" })).toHaveAttribute(
+      "href",
+      "/documents/doc-1",
+    );
+    expect(hit).toHaveTextContent("หน้า 2");
+    expect(hit).toHaveTextContent("<b>พนักงาน</b>ลาพักร้อนได้ปีละ 10 วัน");
+    expect(hit.querySelector("b")).toBeNull();
+    expect(screen.getByTestId("search-mode")).toHaveTextContent("ค้นหาตามความหมายและคำ");
+    expect(screen.queryByTestId("document-row")).not.toBeInTheDocument();
+    const urls = fetchMock.mock.calls.map(([input]) => decodeURIComponent(String(input)));
+    expect(urls.some((u) => u.includes("/documents/search?q=ลาพักร้อน"))).toBe(true);
+  });
+
+  it("explains when nothing accessible matches", async () => {
+    mockApi({
+      "GET /api/v1/documents": () => json({ items: [], total: 0, page: 1, page_size: 20 }),
+      "GET /api/v1/documents/search": () =>
+        json({ query: "x", mode: "keyword", degraded: true, results: [] }),
+    });
+    render(<DocumentsView />, { wrapper: createWrapper() });
+    await userEvent.click(await screen.findByRole("button", { name: "ค้นหาในเนื้อหา" }));
+    await userEvent.type(screen.getByLabelText("ค้นหา"), "งบประมาณ");
+    expect(
+      await screen.findByText("ไม่พบเนื้อหาที่ตรงกับคำค้นในเอกสารที่คุณเข้าถึงได้"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("search-mode")).toHaveTextContent("ไม่พร้อมใช้งานชั่วคราว");
   });
 });
