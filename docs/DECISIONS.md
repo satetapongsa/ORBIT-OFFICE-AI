@@ -231,3 +231,42 @@ revisit this.
 `HOME_PATH`; system status moved to `/system-status`. Every page under `app/(app)` also exports
 `instant = false` (the layout-level flag alone did not silence Next.js instant-navigation
 validation for new page segments).
+
+## ADR-028 — Document capabilities = ACL level + permission (2026-11-11)
+**Decision.** The effective access level (VIEW/EDIT/MANAGE) comes only from the single
+predicate; permission codes add capabilities on top (table in `SECURITY.md` §3). Deletion
+needs MANAGE **and** `documents:delete` (only ADMIN by default), so owners archive instead of
+deleting. `documents:manage_access` lets a records officer manage sharing on any document
+they can see. Unknown and inaccessible documents both answer `404`.
+**Consequences.** The UI shows only actions in `capabilities`; the backend re-checks each one.
+
+## ADR-029 — Upload pipeline (2026-11-11)
+**Decision.** Size is limited at Nginx, the Next.js dev/standalone proxy
+(`proxyClientMaxBodySize`), an ASGI `Content-Length` guard and the service (measured while
+hashing). Type is decided by content sniffing that must agree with the extension. The object
+is written to storage under a server-generated key first, then the DB rows and audit entry
+are committed; a failed commit deletes the object. Extraction is enqueued after commit; if
+the broker is down the version stays `PENDING` and can be reprocessed. Downloads stream
+through the API after the ACL check (the bucket stays private; no presigned URLs).
+**Consequences.** Objects of soft-deleted documents remain until a purge job (Phase 9).
+
+## ADR-030 — Text extraction in the worker (2026-11-11)
+**Decision.** `documents.extract_text` (queue `documents`, 180 s soft limit) uses pypdf,
+python-docx and openpyxl (+ defusedxml) with page/cell/character limits; TXT accepts UTF-8,
+UTF-16 (BOM) and Windows-874/TIS-620. Text is cleaned and stored in `document_version_texts`.
+Expected failures become `FAILED` with a Thai reason and a `DOCUMENT` notification to the
+uploader; the task is idempotent (READY is skipped unless forced). Scanned PDFs finish READY
+with 0 characters — no OCR yet.
+**Consequences.** Phase 7 chunks/embeds `document_version_texts` of current READY versions.
+
+## ADR-031 — Directory lookup for sharing (2026-11-11)
+**Decision.** `GET /directory/users` (`employees:read_directory`, every employee) returns only
+id, display name, job title and department of active users, so employees can share documents
+without `users:read`. The Employee Center (Phase 5) builds on it. Role grants are offered only
+to users with `roles:read`.
+
+## ADR-032 — Dynamic document route (2026-11-11)
+**Decision.** `/documents/[id]/page.tsx` awaits `params` on the server and passes the id to
+the client view; `loading.tsx` provides the static shell (partial prerender `◐`). Calling
+`useParams` in a client component without that shell failed `next build` with a
+"client rendering outside a Suspense boundary" error under Cache Components.

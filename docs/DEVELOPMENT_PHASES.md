@@ -74,18 +74,22 @@ Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
 - [x] Users see only authorized information.
 - [x] Navigation works; responsive layouts work.
 
-## Phase 4 — Document Center ⬜
+## Phase 4 — Document Center ✅
 
 Upload, download, listing, search, filtering, categories, metadata, versions,
 ACL management UI, MinIO storage, file validation (type sniffing, size),
 asynchronous text extraction (PDF, DOCX, XLSX, TXT), processing status,
 document audit history.
 
-Acceptance criteria
-- Users can upload supported documents; files are stored in MinIO; metadata in PostgreSQL.
-- Unauthorized users cannot download protected documents.
-- Document processing status is visible.
-- Tests cover upload, access control and processing errors.
+Delivered: migration `0004`, `/documents` API (+ `/directory/users` for sharing pickers),
+Celery `documents.extract_text`, `/documents` and `/documents/[id]` pages, dashboard
+"recent documents" card (ADR-028…032).
+
+Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
+- [x] Users can upload supported documents; files are stored in MinIO; metadata in PostgreSQL.
+- [x] Unauthorized users cannot download protected documents.
+- [x] Document processing status is visible.
+- [x] Tests cover upload, access control and processing errors.
 
 ## Phase 5 — Task management & Employee Center ⬜
 

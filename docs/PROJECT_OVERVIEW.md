@@ -36,7 +36,7 @@ database. New roles can be created without code changes (see `SECURITY.md`).
 | - | -------------------- | ------------------------ | ------------ |
 | 1 | Dashboard            | แดชบอร์ด                  | Phase 3      |
 | 2 | AI Assistant         | ผู้ช่วย AI                 | Phase 6–7    |
-| 3 | Document Center      | ศูนย์เอกสาร                | Phase 4, 7   |
+| 3 | Document Center      | ศูนย์เอกสาร                | Phase 4 ✅ (RAG: 7) |
 | 4 | Task Management      | จัดการงาน                 | Phase 5      |
 | 5 | Employee Center      | ศูนย์พนักงาน               | Phase 5      |
 | 6 | IT Helpdesk          | แจ้งปัญหาไอที              | Phase 8      |
