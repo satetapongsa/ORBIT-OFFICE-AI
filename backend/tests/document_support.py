@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
+import math
 import uuid
 import zipfile
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import BinaryIO
 
@@ -14,22 +16,38 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.core.storage import ObjectStream
+from app.models.vector import EMBEDDING_DIMENSIONS
+from app.services.ai.embeddings import EmbeddingError, EmbeddingProvider
+from app.services.documents.indexing import index_version
 from app.services.documents.processing import process_version
+from tests.conftest import make_settings
 
 THAI_TEXT = "นโยบายการลาพักร้อน AURA ปี 2569\nพนักงานลาได้ 10 วันต่อปี"
 
 
-def make_pdf(text: str = "AURA leave policy 2026") -> bytes:
-    """A minimal valid one-page PDF with an ASCII text layer."""
-    content = f"BT /F1 18 Tf 72 720 Td ({text}) Tj ET".encode()
+def make_pdf(text: str = "AURA leave policy 2026", *more_pages: str) -> bytes:
+    """A minimal valid PDF with an ASCII text line per page."""
+    pages = [text, *more_pages]
+    kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(len(pages)))
+    # 1 catalog, 2 page tree, 3 font, then a (page, content) pair per page.
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(pages)} >>".encode(),
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
     ]
+    for i, page_text in enumerate(pages):
+        content = f"BT /F1 18 Tf 72 720 Td ({page_text}) Tj ET".encode()
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 3 0 R >> >> /Contents " + f"{5 + 2 * i} 0 R >>".encode()
+        )
+        objects.append(
+            b"<< /Length "
+            + str(len(content)).encode()
+            + b" >>\nstream\n"
+            + content
+            + b"\nendstream"
+        )
     out = io.BytesIO()
     out.write(b"%PDF-1.4\n")
     offsets = []
@@ -136,12 +154,13 @@ class MemoryStorage:
 
 @dataclass
 class InlineProcessor:
-    """Runs the real extraction pipeline synchronously (in a thread) against the test DB."""
+    """Runs the real extraction + indexing pipeline synchronously (in a thread) on the test DB."""
 
     engine: Engine
     storage: MemoryStorage
     run: bool = True
     queued: list[tuple[uuid.UUID, bool]] = field(default_factory=list)
+    embedder: EmbeddingProvider | None = None
 
     async def enqueue(self, version_id: uuid.UUID, *, force: bool = False) -> None:
         self.queued.append((version_id, force))
@@ -150,4 +169,41 @@ class InlineProcessor:
 
     def process(self, version_id: uuid.UUID, force: bool = False) -> str:
         with Session(self.engine, expire_on_commit=False) as session:
-            return process_version(session, self.storage, version_id, force=force)
+            status = process_version(session, self.storage, version_id, force=force)
+            if status == "READY":
+                index_version(session, make_settings(), self.embedder, version_id, force=True)
+            return status
+
+
+def _features(text: str) -> list[str]:
+    """Lower-cased words plus character bigrams (Thai has no spaces between words)."""
+    lowered = text.lower().replace("\n", " ")
+    compact = lowered.replace(" ", "")
+    words = [w for w in lowered.split(" ") if w]
+    return words + [compact[i : i + 2] for i in range(len(compact) - 1)]
+
+
+@dataclass
+class HashEmbedder:
+    """Deterministic test embeddings: texts sharing words/bigrams point the same way."""
+
+    model: str = "hash-test-1024"
+    fail: bool = False
+    calls: int = 0
+
+    def _vector(self, text: str) -> list[float]:
+        vector = [0.0] * EMBEDDING_DIMENSIONS
+        for feature in _features(text):
+            digest = hashlib.blake2b(feature.encode(), digest_size=4).digest()
+            vector[int.from_bytes(digest, "big") % EMBEDDING_DIMENSIONS] += 1.0
+        norm = math.sqrt(sum(v * v for v in vector)) or 1.0
+        return [v / norm for v in vector]
+
+    def embed(self, texts: Sequence[str]) -> list[list[float]]:
+        self.calls += 1
+        if self.fail:
+            raise EmbeddingError()
+        return [self._vector(t) for t in texts]
+
+    async def aembed(self, texts: Sequence[str]) -> list[list[float]]:
+        return self.embed(texts)

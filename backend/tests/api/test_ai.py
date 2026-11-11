@@ -93,6 +93,8 @@ def test_status_lists_tools_by_permission(
     assert tools == {
         "get_my_tasks": False,
         "get_task_details": False,
+        "search_documents": False,
+        "read_document": False,
         "find_colleagues": False,
         "create_task": True,
         "update_task_status": True,
@@ -256,6 +258,8 @@ def test_read_tool_returns_only_what_the_user_may_see(
     assert provider.requests[0]["tools"] == [
         "get_my_tasks",
         "get_task_details",
+        "search_documents",
+        "read_document",
         "find_colleagues",
         "create_task",
         "update_task_status",
