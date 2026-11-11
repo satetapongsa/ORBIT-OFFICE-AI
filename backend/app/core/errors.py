@@ -134,9 +134,14 @@ def _field_path(loc: tuple[Any, ...] | list[Any]) -> str:
     return ".".join(parts)
 
 
+def error_response(exc: AppError) -> JSONResponse:
+    """Render an ``AppError`` as the standard envelope (for handlers that add headers/cookies)."""
+    return _envelope(exc.status_code, exc.code, exc.message, exc.details, exc.headers)
+
+
 async def _app_error_handler(_: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, AppError)  # noqa: S101 - narrowed by registration
-    return _envelope(exc.status_code, exc.code, exc.message, exc.details, exc.headers)
+    return error_response(exc)
 
 
 async def _validation_error_handler(_: Request, exc: Exception) -> JSONResponse:
