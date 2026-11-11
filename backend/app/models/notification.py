@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, func, text
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
@@ -21,6 +21,42 @@ class NotificationType(StrEnum):
     SYSTEM = "SYSTEM"  # announcements from the system itself
     DOCUMENT = "DOCUMENT"  # shared with you, processing failed
     TASK = "TASK"  # assigned to you, status changed, new comment
+    TICKET = "TICKET"  # IT helpdesk: new, assigned, status changed, replies
+
+
+class EmailStatus(StrEnum):
+    PENDING = "PENDING"  # queued for the worker
+    SENT = "SENT"
+    SKIPPED = "SKIPPED"  # e-mail off for this type, or no mail server configured
+    FAILED = "FAILED"
+
+
+# E-mail defaults per type when the user has not chosen (in-app is always on).
+EMAIL_DEFAULTS: dict[NotificationType, bool] = {
+    NotificationType.SECURITY: True,
+    NotificationType.ACCOUNT: True,
+    NotificationType.SYSTEM: True,
+    NotificationType.DOCUMENT: False,
+    NotificationType.TASK: True,
+    NotificationType.TICKET: True,
+}
+
+
+class NotificationPreference(Base):
+    """Per-user, per-type e-mail choice (rows exist only where the user changed a default)."""
+
+    __tablename__ = "notification_preferences"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    type: Mapped[str] = mapped_column(String(20), primary_key=True)
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    __table_args__ = (CheckConstraint(_in_check("type", NotificationType), name="type"),)
 
 
 class Notification(UUIDPrimaryKeyMixin, Base):
@@ -37,10 +73,16 @@ class Notification(UUIDPrimaryKeyMixin, Base):
     entity_type: Mapped[str | None] = mapped_column(String(50))
     entity_id: Mapped[uuid.UUID | None] = mapped_column()
     read_at: Mapped[datetime | None] = mapped_column()
+    email_status: Mapped[str | None] = mapped_column(String(20))
+    emailed_at: Mapped[datetime | None] = mapped_column()
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     __table_args__ = (
         CheckConstraint(_in_check("type", NotificationType), name="type"),
+        CheckConstraint(
+            "email_status IS NULL OR " + _in_check("email_status", EmailStatus),
+            name="email_status",
+        ),
         CheckConstraint(
             "link_url IS NULL OR (link_url LIKE '/%' AND link_url NOT LIKE '//%')",
             name="link_url_relative",

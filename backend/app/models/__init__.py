@@ -29,7 +29,12 @@ from app.models.identity import (
     UserRole,
     role_permissions,
 )
-from app.models.notification import Notification, NotificationType
+from app.models.notification import (
+    EmailStatus,
+    Notification,
+    NotificationPreference,
+    NotificationType,
+)
 from app.models.task import (
     Task,
     TaskAssignee,
@@ -39,6 +44,14 @@ from app.models.task import (
     TaskEventType,
     TaskPriority,
     TaskStatus,
+)
+from app.models.ticket import (
+    Ticket,
+    TicketCategory,
+    TicketComment,
+    TicketEvent,
+    TicketEventType,
+    TicketStatus,
 )
 
 __all__ = [
@@ -59,12 +72,14 @@ __all__ = [
     "DocumentVersion",
     "DocumentVersionText",
     "DocumentVisibility",
+    "EmailStatus",
     "EmployeeHrProfile",
     "EmploymentStatus",
     "EmploymentType",
     "FileType",
     "IndexStatus",
     "Notification",
+    "NotificationPreference",
     "NotificationType",
     "PasswordResetToken",
     "Permission",
@@ -80,6 +95,12 @@ __all__ = [
     "TaskEventType",
     "TaskPriority",
     "TaskStatus",
+    "Ticket",
+    "TicketCategory",
+    "TicketComment",
+    "TicketEvent",
+    "TicketEventType",
+    "TicketStatus",
     "TimestampMixin",
     "UUIDPrimaryKeyMixin",
     "User",
