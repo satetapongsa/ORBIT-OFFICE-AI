@@ -633,7 +633,7 @@ async def confirm_action(
         _note(
             done,
             f"ผู้ใช้ยืนยันแล้ว และระบบดำเนินการสำเร็จ: {done.summary}"
-            f" (ผลลัพธ์: {json.dumps(result, ensure_ascii=False)})",
+            + (f" — {result['link']}" if isinstance(result.get("link"), str) else ""),
         )
     )
     await db.commit()

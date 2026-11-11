@@ -116,12 +116,12 @@ function StoredMessage({
   if (message.role === "assistant") return <AssistantBubble text={message.content} />;
   if (message.role === "system") {
     return (
-      <p
-        className="text-muted-foreground mx-auto max-w-md text-center text-xs"
+      <div
+        className="text-muted-foreground mx-auto max-w-md text-center [&_p]:text-xs"
         data-testid="chat-note"
       >
-        {message.content}
-      </p>
+        <MessageText text={message.content} />
+      </div>
     );
   }
   const action = message.action_id ? actions.get(message.action_id) : undefined;
