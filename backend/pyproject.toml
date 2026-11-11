@@ -73,7 +73,7 @@ plugins = ["pydantic.mypy"]
 exclude = ["migrations/versions"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "celery.*", "kombu.*"]
+module = ["boto3.*", "botocore.*", "celery.*", "kombu.*", "openpyxl.*", "docx.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
