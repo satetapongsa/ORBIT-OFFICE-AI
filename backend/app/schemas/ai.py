@@ -68,6 +68,15 @@ class ActionOut(BaseModel):
     created_at: datetime
 
 
+class Citation(BaseModel):
+    """A document passage the answer cites as [n]."""
+
+    n: int
+    document_id: uuid.UUID
+    title: str
+    page: int | None = None
+
+
 class ChatMessageOut(BaseModel):
     """What the UI shows. Tool messages carry a label and outcome, never the raw tool data."""
 
@@ -78,6 +87,7 @@ class ChatMessageOut(BaseModel):
     tool_label: str | None = None
     tool_ok: bool | None = None
     action_id: uuid.UUID | None = None
+    citations: list[Citation] = Field(default_factory=list)
     created_at: datetime
 
 

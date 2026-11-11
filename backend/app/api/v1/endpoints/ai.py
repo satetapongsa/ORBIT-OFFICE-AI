@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import (
     DbDep,
+    EmbeddingDep,
     MetaDep,
     SettingsDep,
     get_chat_provider,
@@ -97,12 +98,20 @@ async def send_message(
     user: ChatUser,
     provider: ProviderDep,
     limiter: LimiterDep,
+    embedder: EmbeddingDep,
 ) -> StreamingResponse:
     await chat.precheck_send(db, user, settings, provider, limiter, session_id)
     assert provider is not None  # noqa: S101 - checked by precheck_send
     return StreamingResponse(
         chat.stream_reply(
-            get_async_session_factory(), settings, provider, user, meta, session_id, body.content
+            get_async_session_factory(),
+            settings,
+            provider,
+            user,
+            meta,
+            session_id,
+            body.content,
+            embedder=embedder,
         ),
         media_type="text/event-stream",
         # no-transform stops proxies (Next.js, Nginx) from compressing and buffering the stream.
