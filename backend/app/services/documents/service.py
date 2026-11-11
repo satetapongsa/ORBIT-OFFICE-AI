@@ -20,10 +20,9 @@ Unknown and inaccessible documents both answer 404, so existence is never reveal
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass
-from typing import BinaryIO, Protocol
+from typing import Protocol
 
 import anyio
 from fastapi import UploadFile
@@ -34,12 +33,12 @@ from app.core.errors import (
     ConflictError,
     NotFoundError,
     PermissionDeniedError,
-    ServiceUnavailableError,
     ValidationFailedError,
 )
 from app.core.logging import get_logger
 from app.core.permissions import P
 from app.core.principal import CurrentUser, RequestMeta
+from app.core.security import utcnow
 from app.core.storage import ObjectStream
 from app.models.document import (
     AccessLevel,
@@ -64,25 +63,26 @@ from app.schemas.documents import (
 )
 from app.services import audit, notifications
 from app.services.audit import AuditAction
-from app.services.documents.files import FileTooLargeError, InspectedFile, inspect_upload
+from app.services.uploads import (
+    FileStorage,
+    StoredUpload,
+    discard_object,
+    open_object,
+    receive_upload,
+    store_upload,
+)
 
 logger = get_logger(__name__)
 
-_READ_CHUNK = 1024 * 1024
+# Documents and task attachments share one private bucket and storage implementation.
+DocumentStorage = FileStorage
+
 TEXT_PREVIEW_CHARS = 50_000
 LEVEL_LABELS = {
     AccessLevel.VIEW: "ดูเอกสาร",
     AccessLevel.EDIT: "แก้ไขเอกสาร",
     AccessLevel.MANAGE: "จัดการเอกสาร",
 }
-
-
-class DocumentStorage(Protocol):
-    def put_object(
-        self, key: str, fileobj: BinaryIO, *, content_type: str, sha256: str
-    ) -> None: ...
-    def open_object(self, key: str) -> ObjectStream: ...
-    def delete_object(self, key: str) -> None: ...
 
 
 class DocumentProcessor(Protocol):
@@ -108,13 +108,6 @@ class CeleryDocumentProcessor:
             await anyio.to_thread.run_sync(_send)
         except Exception:
             logger.warning("document_enqueue_failed", version_id=str(version_id), exc_info=True)
-
-
-@dataclass(frozen=True, slots=True)
-class StoredUpload:
-    inspected: InspectedFile
-    size_bytes: int
-    sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,44 +145,6 @@ def _deny(allowed: bool, message: str) -> None:
 
 
 # --- Upload handling ------------------------------------------------------------------
-
-
-async def receive_upload(upload: UploadFile, settings: Settings) -> StoredUpload:
-    """Hash and size-check the (already spooled) upload, then sniff its type."""
-    await upload.seek(0)
-    digest = hashlib.sha256()
-    size = 0
-    while chunk := await upload.read(_READ_CHUNK):
-        size += len(chunk)
-        if size > settings.upload_max_bytes:
-            raise FileTooLargeError(
-                f"ไฟล์มีขนาดใหญ่เกิน {settings.upload_max_bytes // (1024 * 1024)} MB"
-            )
-        digest.update(chunk)
-    await upload.seek(0)
-    inspected = await anyio.to_thread.run_sync(inspect_upload, upload.file, upload.filename)
-    return StoredUpload(inspected=inspected, size_bytes=size, sha256=digest.hexdigest())
-
-
-async def _store(
-    storage: DocumentStorage, key: str, upload: UploadFile, stored: StoredUpload
-) -> None:
-    try:
-        await anyio.to_thread.run_sync(
-            lambda: storage.put_object(
-                key, upload.file, content_type=stored.inspected.mime_type, sha256=stored.sha256
-            )
-        )
-    except Exception:
-        logger.error("document_storage_put_failed", key=key, exc_info=True)
-        raise ServiceUnavailableError("ไม่สามารถบันทึกไฟล์ได้ในขณะนี้ กรุณาลองใหม่ภายหลัง") from None
-
-
-async def _discard(storage: DocumentStorage, key: str) -> None:
-    try:
-        await anyio.to_thread.run_sync(storage.delete_object, key)
-    except Exception:
-        logger.warning("document_storage_cleanup_failed", key=key, exc_info=True)
 
 
 def _version(
@@ -269,7 +224,7 @@ async def create_document(
     version = _version(
         version_id=version_id, document_id=document_id, number=1, stored=stored, uploader=user.id
     )
-    await _store(storage, version.storage_key, upload, stored)
+    await store_upload(storage, version.storage_key, upload, stored)
     try:
         session.add(
             Document(
@@ -306,7 +261,7 @@ async def create_document(
         await session.commit()
     except Exception:
         await session.rollback()
-        await _discard(storage, version.storage_key)
+        await discard_object(storage, version.storage_key)
         raise
     await processor.enqueue(version_id)
     return document_id
@@ -327,7 +282,7 @@ async def add_version(
     stored = await receive_upload(upload, settings)
     version_id = uuid.uuid4()
     key = f"documents/{document_id}/{version_id}"
-    await _store(storage, key, upload, stored)
+    await store_upload(storage, key, upload, stored)
     try:
         document = await document_repo.get_document_for_update(session, document_id)
         if document is None:
@@ -361,7 +316,7 @@ async def add_version(
         await session.commit()
     except Exception:
         await session.rollback()
-        await _discard(storage, key)
+        await discard_object(storage, key)
         raise
     await processor.enqueue(version_id)
 
@@ -429,8 +384,6 @@ async def delete_document(
     document = await document_repo.get_document_for_update(session, document_id)
     if document is None:
         raise NotFoundError(NOT_FOUND)
-    from app.core.security import utcnow
-
     document.deleted_at = utcnow()
     audit.record(
         session,
@@ -492,11 +445,7 @@ async def open_download(
     version = await document_repo.get_version(session, document_id, target) if target else None
     if version is None:
         raise NotFoundError("ไม่พบไฟล์ของเอกสารนี้")
-    try:
-        stream = await anyio.to_thread.run_sync(storage.open_object, version.storage_key)
-    except Exception:
-        logger.error("document_storage_get_failed", key=version.storage_key, exc_info=True)
-        raise ServiceUnavailableError("ไม่สามารถดาวน์โหลดไฟล์ได้ในขณะนี้ กรุณาลองใหม่ภายหลัง") from None
+    stream = await open_object(storage, version.storage_key)
     audit.record(
         session,
         AuditAction.DOCUMENT_DOWNLOADED,

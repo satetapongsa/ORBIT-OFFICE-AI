@@ -83,16 +83,16 @@ class UploadSizeLimitMiddleware:
     # Multipart framing and form fields on top of the file itself.
     OVERHEAD_BYTES = 1024 * 1024
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int, path_prefix: str) -> None:
+    def __init__(self, app: ASGIApp, *, max_bytes: int, path_prefixes: tuple[str, ...]) -> None:
         self.app = app
         self.limit = max_bytes + self.OVERHEAD_BYTES
-        self.path_prefix = path_prefix
+        self.path_prefixes = path_prefixes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (
             scope["type"] == "http"
             and scope["method"] in {"POST", "PUT"}
-            and scope["path"].startswith(self.path_prefix)
+            and scope["path"].startswith(self.path_prefixes)
         ):
             from app.core.errors import AppError, error_response
 

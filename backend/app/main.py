@@ -91,7 +91,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         UploadSizeLimitMiddleware,
         max_bytes=settings.upload_max_bytes,
-        path_prefix=f"{API_PREFIX}/documents",
+        path_prefixes=(f"{API_PREFIX}/documents", f"{API_PREFIX}/tasks"),
     )
     # Added last so it is the outermost middleware and wraps everything above.
     app.add_middleware(RequestContextMiddleware)

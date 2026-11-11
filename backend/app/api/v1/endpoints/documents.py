@@ -44,7 +44,7 @@ StorageDep = Annotated[DocumentStorage, Depends(get_document_storage)]
 ProcessorDep = Annotated[DocumentProcessor, Depends(get_document_processor)]
 
 
-def _content_disposition(filename: str) -> str:
+def content_disposition(filename: str) -> str:
     """RFC 6266 / 5987: ASCII fallback plus the UTF-8 (Thai) name."""
     ascii_name = filename.encode("ascii", "ignore").decode() or "document"
     ascii_name = ascii_name.replace('"', "").replace("\\", "")
@@ -185,7 +185,7 @@ async def download_document(
         iter(stream),
         media_type=version.mime_type,
         headers={
-            "Content-Disposition": _content_disposition(version.original_filename),
+            "Content-Disposition": content_disposition(version.original_filename),
             "Content-Length": str(version.size_bytes),
             "X-Content-Type-Options": "nosniff",
             "Cache-Control": "private, no-store",
