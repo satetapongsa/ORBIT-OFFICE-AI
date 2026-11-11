@@ -93,10 +93,34 @@ search, RAG retrieval, summarisation and report generation. Tests must cover
 each call site (Phase 4/7/9). Phase 2 tests (`tests/api/test_document_access.py`) cover every
 rule above against PostgreSQL, including VIEW vs EDIT levels and soft deletion.
 
-## 4. File upload security (Phase 4)
+### Capabilities on top of the access level (Phase 4, `app/services/documents/service.py`)
+| operation | requires |
+| --- | --- |
+| list, detail, text preview, download | VIEW |
+| upload a new document | `documents:upload` (department: own, unless `documents:manage`) |
+| edit metadata, archive | EDIT |
+| change visibility / department | MANAGE |
+| upload a version | EDIT + `documents:upload` |
+| reprocess a version | EDIT |
+| delete (soft) | MANAGE + `documents:delete` (owners archive instead) |
+| read/replace ACL | MANAGE, or VIEW + `documents:manage_access` |
+| history | MANAGE, or VIEW + `audit:read` |
 
-- Allow-list of extensions **and** sniffed MIME types (PDF, DOCX, XLSX, TXT).
-- Max size `UPLOAD_MAX_BYTES` (default 25 MB), enforced while streaming.
+Unknown and inaccessible documents both return `404`. The effective level is computed with
+the same predicate (`effective_access_level`), so it can never disagree with listings.
+Granting a USER access (or raising it) sends that user a `DOCUMENT` notification.
+
+## 4. File upload security (Phase 4, implemented)
+
+- Allow-list of extensions **and** content sniffing (PDF magic, OOXML archive layout —
+  `word/document.xml` / `xl/workbook.xml` — or decodable text); the two must agree, so a
+  renamed file is rejected (`415`). Client `Content-Type` is ignored.
+- Max size `UPLOAD_MAX_BYTES` (default 25 MB) at four layers: Nginx `client_max_body_size 30m`,
+  Next.js proxy `proxyClientMaxBodySize 30mb`, an ASGI middleware that rejects a too-large
+  `Content-Length` before the body is read (`411` without a length), and the service which
+  measures the real bytes while hashing.
+- Zip-bomb / archive guard for DOCX/XLSX (entry count, total uncompressed size, per-entry
+  ratio, encrypted entries, `..`/absolute paths) — at upload and again in the worker.
 - Storage keys are server-generated (`documents/{document_id}/{version_id}`);
   user filenames are sanitised and stored only as metadata.
 - Downloads stream through the backend after an ACL check (or short-lived
@@ -104,7 +128,14 @@ rule above against PostgreSQL, including VIEW vs EDIT levels and soft deletion.
 - `Content-Disposition: attachment` with RFC 5987 filename encoding;
   `X-Content-Type-Options: nosniff`.
 - Parsers run in the worker with timeouts and size limits (zip-bomb guard for
-  DOCX/XLSX).
+  DOCX/XLSX): 180 s soft limit per file, 2,000 PDF pages, 2,000,000 XLSX cells, 2,000,000
+  output characters; openpyxl uses `defusedxml`. Failures become `FAILED` with a Thai reason
+  and notify the uploader; editors can reprocess.
+- Extracted text is untrusted: the UI renders it as plain text (never HTML), and Phase 7 will
+  pass it to the model only inside delimited data sections after the ACL filter.
+- Storage writes happen before the DB commit; a failed commit deletes the object again.
+  Deleted documents are soft-deleted; their objects stay in the private bucket (purge job:
+  Phase 9). No antivirus scanning yet (Phase 9).
 
 ## 5. AI and RAG security
 
@@ -152,7 +183,11 @@ hashed e-mail, never the password), `auth.login_rate_limited`, `auth.logout`,
 Entries are written in the same transaction as the change. A database trigger rejects
 `UPDATE`/`DELETE` on `audit_logs`. Read access requires `audit:read`.
 
-Planned events (later phases): document upload / download / delete / ACL change, task
+Document events (Phase 4): `document.uploaded`, `document.version_uploaded`,
+`document.updated`, `document.deleted`, `document.downloaded` (every download),
+`document.acl_changed`, `document.reprocess_requested`.
+
+Planned events (later phases): task
 updates, ticket status changes, AI action confirmations, system configuration changes.
 Every entry stores actor, IP, user agent and request ID.
 

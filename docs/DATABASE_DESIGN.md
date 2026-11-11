@@ -24,7 +24,8 @@ is built into PostgreSQL ≥ 13.)
 
 **Implemented so far:** `0001` (extensions), `0002` (departments, users, roles,
 permissions, user_roles, role_permissions, user_sessions, password_reset_tokens,
-audit_logs, documents core, document_acl) and `0003` (notifications). Sections marked *implemented* match the
+audit_logs, documents core, document_acl), `0003` (notifications) and `0004`
+(document versions, extracted text, document category, `DOCUMENT` notifications). Sections marked *implemented* match the
 migration; the rest is the plan.
 
 ## 2. Identity and access
@@ -96,10 +97,12 @@ id, user_id FK CASCADE, token_hash (SHA-256, unique), created_at, expires_at, us
 
 ## 3. Documents and RAG
 
-### `documents` (core implemented in Phase 2; completed in Phase 4)
+### `documents` (implemented: core in Phase 2, completed in Phase 4)
 Phase 2 created id, title, description, owner_id (`ON DELETE RESTRICT`), department_id,
-visibility, status, timestamps and deleted_at so the access predicate could be built and
-tested. `category` and `current_version_id` arrive with the Phase 4 migration.
+visibility, status, timestamps and deleted_at; migration `0004` added `category` (CHECK,
+server default `OTHER`) and `current_version_id` (FK → document_versions, `ON DELETE SET NULL`,
+added with `use_alter` to break the cycle). Indexes: owner, department, `updated_at`, and a
+`pg_trgm` GIN index on `title` (`ix_documents_title_trgm`) for search.
 
 | column | type | notes |
 | --- | --- | --- |
@@ -114,12 +117,29 @@ tested. `category` and `current_version_id` arrive with the Phase 4 migration.
 | current_version_id | uuid FK → document_versions NULL | `use_alter` to break the cycle |
 | deleted_at | timestamptz NULL | |
 
-### `document_versions` (Phase 4)
-id, document_id FK CASCADE, version_number (unique with document_id),
-storage_key (unique; never user-controlled), original_filename (sanitised),
-mime_type, size_bytes, sha256, uploaded_by FK, processing_status
-(`PENDING`, `PROCESSING`, `READY`, `FAILED`), processing_error (text NULL),
-page_count NULL, created_at.
+### `document_versions` (Phase 4, implemented)
+| column | type | notes |
+| --- | --- | --- |
+| id | uuid PK | |
+| document_id | uuid FK → documents ON DELETE CASCADE | unique with `version_number` |
+| version_number | int | 1, 2, … per document |
+| storage_key | varchar(300) unique | `documents/{document_id}/{version_id}` — server-generated |
+| original_filename | varchar(255) | sanitised display name; extension follows the sniffed type |
+| file_type | varchar(10) | `PDF`, `DOCX`, `XLSX`, `TXT` (CHECK) — decided from content |
+| mime_type | varchar(150) | canonical type for the sniffed format |
+| size_bytes | bigint | CHECK ≥ 0 |
+| sha256 | varchar(64) | hex digest of the stored bytes |
+| uploaded_by | uuid FK → users ON DELETE SET NULL | |
+| processing_status | varchar(20) | `PENDING`, `PROCESSING`, `READY`, `FAILED` (CHECK, indexed) |
+| processing_error | varchar(500) NULL | Thai, user-presentable reason |
+| page_count / char_count | int NULL | PDF pages / extracted characters |
+| processed_at | timestamptz NULL | |
+| created_at | timestamptz | |
+
+### `document_version_texts` (Phase 4, implemented)
+`document_version_id` (PK, FK CASCADE), `content` text (cleaned, ≤ 2,000,000 characters),
+`created_at`. Kept apart from `document_versions` so listings never load document text.
+Phase 7 chunks this text into `document_chunks`.
 
 ### `document_acl` (Phase 2, implemented; used from Phase 4)
 | column | type | notes |
@@ -193,7 +213,7 @@ expired sessions.
 | --- | --- | --- |
 | id | uuid PK | |
 | user_id | uuid FK → users ON DELETE CASCADE | the only reader |
-| type | varchar(20) | `SECURITY`, `ACCOUNT`, `SYSTEM` (CHECK); later phases add `TASK`, `TICKET`, … by migration |
+| type | varchar(20) | `SECURITY`, `ACCOUNT`, `SYSTEM`, `DOCUMENT` (CHECK; `DOCUMENT` added in `0004`); later phases add `TASK`, `TICKET`, … by migration |
 | title | varchar(200) | Thai text written by the backend |
 | body | text | may be empty |
 | link_url | varchar(500) NULL | CHECK: relative in-app path (`/…`, never `//…`) |

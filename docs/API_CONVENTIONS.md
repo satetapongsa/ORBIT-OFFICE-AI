@@ -119,6 +119,18 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `DELETE /roles/{id}` | `roles:manage` | custom, unassigned roles only |
 | `GET /audit-logs` | `audit:read` | filters `action`, `actor_id`, `entity_type`, `entity_id`, `occurred_from`, `occurred_to` |
 | `GET /dashboard/summary` | signed in | personal sections always; `documents` needs `documents:read` (ACL-counted), `organization` needs `users:read`, `security` needs `audit:read` — otherwise `null`. Days are grouped in `APP_TIMEZONE` (Phase 3) |
+| `GET /documents` | VIEW (ACL predicate) | `q` (title/description, wildcards escaped), `category`, `visibility`, `status`, `processing_status`, `department_id`, `mine`, `sort` = `updated`/`created`/`title`, `page`, `page_size` |
+| `POST /documents` | `documents:upload` | multipart: `file` + `title`, `description`, `category`, `visibility`, `department_id` (own department unless `documents:manage`); `201` detail; `413` too large, `415` unsupported/mismatched type, `422` empty/unsafe file, `503` storage down |
+| `GET /documents/{id}` | VIEW | detail + `access_level`, `capabilities`, `versions`; `404` for unknown **and** inaccessible |
+| `PATCH /documents/{id}` | EDIT (visibility/department: MANAGE) | title, description, category, status (`ARCHIVED` = owner's "remove") |
+| `DELETE /documents/{id}` | MANAGE + `documents:delete` | soft delete; `204` |
+| `POST /documents/{id}/versions` | EDIT + `documents:upload` | multipart `file`; becomes current |
+| `POST /documents/{id}/versions/{vid}/reprocess` | EDIT | `202`; `409` if READY/PROCESSING |
+| `GET /documents/{id}/download` | VIEW | `?version_id=`; streams; `Content-Disposition: attachment` (RFC 5987), `nosniff`, `no-store`; audited |
+| `GET /documents/{id}/text` | VIEW | extracted text preview (first 50,000 chars, `truncated`); `409` until READY |
+| `GET /documents/{id}/acl`, `PUT /documents/{id}/acl` | MANAGE, or VIEW + `documents:manage_access` | replace explicit grants (USER/DEPARTMENT/ROLE × VIEW/EDIT/MANAGE); `422` duplicates/owner/unknown principal |
+| `GET /documents/{id}/history` | MANAGE, or VIEW + `audit:read` | last 100 audit events of the document |
+| `GET /directory/users` | `employees:read_directory` | `q`, `limit` ≤ 50; id, display name, job title, department only |
 | `GET /notifications` | signed in (own only) | `page`, `page_size` (≤100, default 20), `unread_only`; response adds `unread_count` |
 | `GET /notifications/unread-count` | signed in (own only) | `{unread_count}` |
 | `POST /notifications/{id}/read` | signed in + CSRF | idempotent; `404` for someone else's notification |
