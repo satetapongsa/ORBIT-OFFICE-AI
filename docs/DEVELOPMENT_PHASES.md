@@ -38,7 +38,7 @@ Acceptance criteria (verified in Docker on 2026-11-11 — see `PROJECT_STATUS.md
 - [x] Basic test suite runs
 - [x] README contains setup instructions
 
-## Phase 2 — Authentication & authorization ⬜
+## Phase 2 — Authentication & authorization ✅
 
 Login, logout, current user, session lifecycle (access JWT + rotating refresh
 token in HttpOnly cookies, CSRF double-submit), Argon2id hashing, user
@@ -47,12 +47,15 @@ authorization dependencies, document ACL foundation (`document_acl` table +
 access predicate), audit logs, secure development seed data, login UI,
 permission-aware navigation.
 
-Acceptance criteria
-- A user can log in and log out.
-- Unauthenticated users cannot access protected APIs.
-- Role permissions are enforced by the backend; unauthorized requests are rejected.
-- Frontend navigation reflects permissions.
-- Authentication and authorization tests pass.
+Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
+- [x] A user can log in and log out.
+- [x] Unauthenticated users cannot access protected APIs.
+- [x] Role permissions are enforced by the backend; unauthorized requests are rejected.
+- [x] Frontend navigation reflects permissions.
+- [x] Authentication and authorization tests pass.
+
+Deferred by design: the user/role administration **UI** ships with the Employee Center
+(Phase 5); the APIs exist now. E-mail delivery of reset links needs a mail provider.
 
 ## Phase 3 — Dashboard & application UI ⬜
 
