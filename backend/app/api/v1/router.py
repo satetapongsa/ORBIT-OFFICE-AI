@@ -9,9 +9,11 @@ from app.api.v1.endpoints import (
     departments,
     directory,
     documents,
+    employees,
     health,
     notifications,
     roles,
+    tasks,
     users,
 )
 
@@ -26,3 +28,5 @@ api_router.include_router(dashboard.router)
 api_router.include_router(notifications.router)
 api_router.include_router(documents.router)
 api_router.include_router(directory.router)
+api_router.include_router(tasks.router)
+api_router.include_router(employees.router)
