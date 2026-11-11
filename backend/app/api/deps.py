@@ -27,6 +27,7 @@ from app.core.security import (
 )
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
+from app.services.documents.service import DocumentProcessor, DocumentStorage
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -59,6 +60,16 @@ def _client_ip(request: Request) -> str | None:
         return str(ipaddress.ip_address(host)) if host else None
     except ValueError:
         return None  # e.g. the TestClient's "testclient" host
+
+
+def get_document_storage(request: Request) -> DocumentStorage:
+    storage: DocumentStorage = request.app.state.document_storage
+    return storage
+
+
+def get_document_processor(request: Request) -> DocumentProcessor:
+    processor: DocumentProcessor = request.app.state.document_processor
+    return processor
 
 
 def get_request_meta(request: Request) -> RequestMeta:

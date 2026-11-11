@@ -16,11 +16,12 @@ from app.core.db import dispose_engines
 from app.core.errors import register_exception_handlers
 from app.core.event_loop import is_unsupported_windows_loop
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
 from app.core.notifications import LogPasswordResetNotifier
 from app.core.rate_limit import RedisRateLimiter
 from app.core.redis import close_redis, get_redis
-from app.core.storage import get_storage
+from app.core.storage import ObjectStorage, get_storage
+from app.services.documents.service import CeleryDocumentProcessor
 
 logger = get_logger(__name__)
 
@@ -73,6 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.rate_limiter = RedisRateLimiter(get_redis())
     app.state.reset_notifier = LogPasswordResetNotifier(settings)
+    app.state.document_storage = ObjectStorage(settings)
+    app.state.document_processor = CeleryDocumentProcessor()
 
     register_exception_handlers(app)
 
@@ -85,6 +88,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             allow_headers=["Content-Type", "X-CSRF-Token", "X-Request-ID"],
             expose_headers=["X-Request-ID"],
         )
+    app.add_middleware(
+        UploadSizeLimitMiddleware,
+        max_bytes=settings.upload_max_bytes,
+        path_prefix=f"{API_PREFIX}/documents",
+    )
     # Added last so it is the outermost middleware and wraps everything above.
     app.add_middleware(RequestContextMiddleware)
 

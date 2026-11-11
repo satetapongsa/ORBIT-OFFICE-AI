@@ -73,3 +73,44 @@ class RequestContextMiddleware:
                 status_code=status_code,
                 duration_ms=duration_ms,
             )
+
+
+class UploadSizeLimitMiddleware:
+    """Rejects oversized uploads from the ``Content-Length`` header, before the multipart body
+    is read and spooled. Upload routes also re-check the real size while hashing; Nginx adds
+    ``client_max_body_size`` in front (docs/SECURITY.md §4)."""
+
+    # Multipart framing and form fields on top of the file itself.
+    OVERHEAD_BYTES = 1024 * 1024
+
+    def __init__(self, app: ASGIApp, *, max_bytes: int, path_prefix: str) -> None:
+        self.app = app
+        self.limit = max_bytes + self.OVERHEAD_BYTES
+        self.path_prefix = path_prefix
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            scope["type"] == "http"
+            and scope["method"] in {"POST", "PUT"}
+            and scope["path"].startswith(self.path_prefix)
+        ):
+            from app.core.errors import AppError, error_response
+
+            headers = dict(scope["headers"])
+            raw_length = headers.get(b"content-length")
+            error: AppError | None = None
+            if raw_length is None:
+                if headers.get(b"transfer-encoding"):
+                    error = AppError("ต้องระบุขนาดของไฟล์ที่อัปโหลด")
+                    error.status_code = 411
+                    error.code = "length_required"
+            elif not raw_length.isdigit() or int(raw_length) > self.limit:
+                error = AppError(
+                    f"ไฟล์มีขนาดใหญ่เกิน {(self.limit - self.OVERHEAD_BYTES) // (1024 * 1024)} MB"
+                )
+                error.status_code = 413
+                error.code = "file_too_large"
+            if error is not None:
+                await error_response(error)(scope, receive, send)
+                return
+        await self.app(scope, receive, send)

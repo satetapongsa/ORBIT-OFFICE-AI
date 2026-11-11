@@ -7,6 +7,8 @@ from app.api.v1.endpoints import (
     auth,
     dashboard,
     departments,
+    directory,
+    documents,
     health,
     notifications,
     roles,
@@ -22,3 +24,5 @@ api_router.include_router(roles.router)
 api_router.include_router(audit.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(notifications.router)
+api_router.include_router(documents.router)
+api_router.include_router(directory.router)
