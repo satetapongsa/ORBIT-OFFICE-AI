@@ -27,6 +27,7 @@ from app.core.security import (
 )
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
+from app.services.ai.embeddings import EmbeddingProvider
 from app.services.ai.providers.base import ChatProvider
 from app.services.documents.service import DocumentProcessor, DocumentStorage
 
@@ -75,6 +76,11 @@ def get_document_processor(request: Request) -> DocumentProcessor:
 
 def get_chat_provider(request: Request) -> ChatProvider | None:
     provider: ChatProvider | None = request.app.state.chat_provider
+    return provider
+
+
+def get_embedding_provider(request: Request) -> EmbeddingProvider | None:
+    provider: EmbeddingProvider | None = request.app.state.embedding_provider
     return provider
 
 
@@ -143,6 +149,7 @@ async def get_current_user(request: Request, session: DbDep, settings: SettingsD
 
 
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
+EmbeddingDep = Annotated[EmbeddingProvider | None, Depends(get_embedding_provider)]
 
 
 def require_permissions(*codes: str) -> Callable[[CurrentUser], Awaitable[CurrentUser]]:

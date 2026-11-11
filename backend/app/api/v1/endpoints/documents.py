@@ -12,11 +12,15 @@ from fastapi.responses import StreamingResponse
 from app.api.deps import (
     CurrentUserDep,
     DbDep,
+    EmbeddingDep,
     MetaDep,
     SettingsDep,
     get_document_processor,
     get_document_storage,
+    require_permissions,
 )
+from app.core.permissions import P
+from app.core.principal import CurrentUser
 from app.models.document import (
     DocumentCategory,
     DocumentStatus,
@@ -27,6 +31,8 @@ from app.repositories.documents import DocumentFilters, SortKey
 from app.schemas.documents import (
     AclOut,
     AclReplace,
+    ContentSearchHit,
+    ContentSearchResult,
     DocumentCreate,
     DocumentDetail,
     DocumentHistoryItem,
@@ -37,8 +43,11 @@ from app.schemas.documents import (
 from app.services.documents import queries
 from app.services.documents import service as document_service
 from app.services.documents.service import DocumentProcessor, DocumentStorage
+from app.services.rag import search as rag
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+
+SNIPPET_CHARS = 400
 
 StorageDep = Annotated[DocumentStorage, Depends(get_document_storage)]
 ProcessorDep = Annotated[DocumentProcessor, Depends(get_document_processor)]
@@ -77,6 +86,38 @@ async def list_documents(
     )
     return await queries.list_documents(
         db, user, filters, sort=sort, page=page, page_size=page_size
+    )
+
+
+@router.get(
+    "/search",
+    response_model=ContentSearchResult,
+    summary="Search inside the documents I can access (semantic + keyword)",
+)
+async def search_content(
+    db: DbDep,
+    user: Annotated[CurrentUser, Depends(require_permissions(P.DOCUMENTS_READ))],
+    embedder: EmbeddingDep,
+    q: Annotated[str, Query(min_length=1, max_length=500)],
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> ContentSearchResult:
+    result = await rag.search(db, user, q, limit=limit * 3, embedder=embedder)
+    return ContentSearchResult(
+        query=q.strip(),
+        mode=result.mode,
+        degraded=result.degraded,
+        results=[
+            ContentSearchHit(
+                document_id=h.document_id,
+                title=h.title,
+                category=DocumentCategory(h.category),
+                version_number=h.version_number,
+                page=h.page,
+                snippet=h.content[:SNIPPET_CHARS],
+                score=round(h.score, 4),
+            )
+            for h in rag.best_per_document(result.hits, limit=limit)
+        ],
     )
 
 

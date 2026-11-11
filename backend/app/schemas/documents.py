@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -14,6 +14,7 @@ from app.models.document import (
     DocumentStatus,
     DocumentVisibility,
     FileType,
+    IndexStatus,
     PrincipalType,
     ProcessingStatus,
 )
@@ -56,6 +57,7 @@ class VersionSummary(BaseModel):
     file_type: FileType
     size_bytes: int
     processing_status: ProcessingStatus
+    index_status: IndexStatus
 
 
 class VersionOut(VersionSummary):
@@ -66,6 +68,9 @@ class VersionOut(VersionSummary):
     page_count: int | None
     char_count: int | None
     processed_at: datetime | None
+    index_error: str | None
+    chunk_count: int | None
+    indexed_at: datetime | None
     created_at: datetime
 
 
@@ -154,3 +159,20 @@ class DirectoryUser(BaseModel):
     display_name: str
     job_title: str | None
     department: DepartmentRef | None
+
+
+class ContentSearchHit(BaseModel):
+    document_id: uuid.UUID
+    title: str
+    category: DocumentCategory
+    version_number: int
+    page: int | None
+    snippet: str = Field(description="The best matching passage (plain text, untrusted).")
+    score: float
+
+
+class ContentSearchResult(BaseModel):
+    query: str
+    mode: Literal["hybrid", "keyword"]
+    degraded: bool = Field(description="Semantic search is configured but was unavailable.")
+    results: list[ContentSearchHit]
