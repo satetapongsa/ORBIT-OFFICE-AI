@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     ai,
+    analytics,
     audit,
     auth,
     dashboard,
@@ -15,6 +16,7 @@ from app.api.v1.endpoints import (
     notifications,
     roles,
     tasks,
+    tickets,
     users,
 )
 
@@ -32,3 +34,5 @@ api_router.include_router(directory.router)
 api_router.include_router(tasks.router)
 api_router.include_router(employees.router)
 api_router.include_router(ai.router)
+api_router.include_router(tickets.router)
+api_router.include_router(analytics.router)
