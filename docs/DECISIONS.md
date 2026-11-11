@@ -310,3 +310,42 @@ UI and sent as the end of that day in Bangkok (`23:59+07:00`); the API rejects t
 without a time zone.
 **Why.** One audited pipeline for every file; "due 30 Nov" means the whole business day,
 independent of the browser's time zone.
+
+## ADR-037 — Provider adapters (2026-11-12)
+**Decision.** `app/services/ai/providers` exposes one neutral streaming interface. The
+Anthropic adapter uses the official `anthropic` SDK (async `messages.stream`), sends no sampling
+parameters (current Claude models reject them) and leaves thinking at the model default; on
+models that support it, `AI_CHAT_REFUSAL_FALLBACK` enables server-side refusal fallbacks
+(beta `server-side-fallback-2026-07-01`, `fallbacks: "default"`). Tools stream their input
+eagerly and are validated by the chat service. The provider's own assistant content is stored
+(`provider_payload`) and replayed unchanged to the same model, never edited. The
+OpenAI-compatible adapter (Ollama, vLLM, LM Studio, OpenAI, gateways) speaks plain HTTP via
+`httpx2` and assembles streamed tool-call fragments. Errors become Thai `ProviderError`s
+without provider bodies.
+**Why.** Local/free models and Claude behind one interface; replaying exactly what the
+provider returned keeps multi-turn tool use valid.
+
+## ADR-038 — Tools run as the user; changes need confirmation (2026-11-12)
+**Decision.** A fixed registry of tools calls the existing services with the signed-in user,
+so visibility and capabilities are the API's own. Read-only tools return data; mutating tools
+only create `ai_action_requests` (`PENDING`, 15-minute TTL) with a Thai summary. Confirming
+re-checks permissions, marks the action `EXECUTED` in the same transaction as the change and
+appends a `system` note to the chat; rejecting appends a note too. History is append-only.
+**Why.** The model can never act beyond the user, nothing changes without an explicit click,
+and the model learns outcomes without rewriting earlier turns.
+
+## ADR-039 — Ticket tools wait for the ticket service (2026-11-12)
+**Decision.** `get_my_tickets` / `create_ticket` are not shipped in Phase 6; they are added in
+Phase 8 together with the helpdesk tables and services.
+**Why.** A minimal ticket service now would be replaced in Phase 8 and would need its own
+permissions, UI and tests twice.
+
+## ADR-040 — Streaming with server-sent events over POST (2026-11-12)
+**Decision.** `POST /ai/sessions/{id}/messages` returns `text/event-stream` (`start`, `delta`,
+`tool`, `action`, `done`, `error`); the browser reads it with `fetch` (CSRF header and
+refresh-retry via `apiStream`). Checks that can fail (provider, ownership, rate limit) run
+before the stream starts and return the normal JSON error envelope. The stream uses its own
+database session. Responses carry `Cache-Control: no-store, no-transform` and
+`X-Accel-Buffering: no` — without `no-transform` the Next.js proxy gzip-compressed the stream
+and delivered it in one piece.
+**Why.** `EventSource` cannot POST or send CSRF headers; SSE is simple and proxy-friendly.

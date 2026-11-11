@@ -1,7 +1,7 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 5 — Task Management & Employee Center — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 6.
-**Last Updated:** 2026-11-11
+**Current Phase:** Phase 6 — AI Assistant & Tool Calling — ✅ **COMPLETE** (verified 2026-11-12). Next: Phase 7.
+**Last Updated:** 2026-11-12
 
 ## Completed
 
@@ -171,11 +171,39 @@
 - **Fixes found while verifying**: avatar initials showed Thai leading vowels ("ไเ" →
   "อท"); activity feeds showed raw `document.*` codes (labels added).
 
+### Phase 6 — AI Assistant & Tool Calling
+- **Data model** (migration `0006`): `chat_sessions`, `chat_messages` (neutral tool calls,
+  provider payload replayed unchanged, token counts), `ai_action_requests` (proposed changes
+  with status and expiry).
+- **Providers** (ADR-037): Anthropic via the official `anthropic` SDK (streaming, no sampling
+  parameters, eager tool-input streaming, prompt caching, server-side refusal fallback on
+  supported models) and OpenAI-compatible servers (Ollama, vLLM, LM Studio, OpenAI) over
+  `httpx2` with streamed tool-call assembly; Thai, body-free error mapping
+  (misconfigured / rate limited / unavailable / bad request / refused / truncated).
+- **Tools** (ADR-038): `get_my_tasks`, `get_task_details`, `find_colleagues` (read-only) and
+  `create_task`, `update_task_status` (proposals). Strict argument validation; tools run as the
+  user through the task services and visibility predicate; offered only with `ai:use_tools`
+  plus each tool's permission. Ticket tools move to Phase 8 (ADR-039).
+- **Chat API** (ADR-040): status, sessions (list/create/rename/soft delete/detail), streaming
+  messages over server-sent events, confirm/reject actions. Tool loop up to
+  `AI_CHAT_MAX_TOOL_STEPS`; per-user rate limit; last `AI_CHAT_HISTORY_MESSAGES` messages
+  sent; confirmations re-check permissions, run exactly once and append a system note.
+- **Frontend**: `/assistant` — conversation list (collapsible on phones, delete with
+  confirmation), streamed answers with a stop button, tool chips, action cards with
+  ยืนยัน/ปฏิเสธ and a link to the result, plain-text rendering with in-app links only,
+  "not configured" state that keeps history readable, suggestions; nav `CURRENT_PHASE = 6`.
+- **Settings**: `AI_CHAT_REFUSAL_FALLBACK`, `AI_CHAT_RATE_LIMIT_MESSAGES`,
+  `AI_CHAT_RATE_LIMIT_WINDOW_SECONDS`, `AI_CHAT_HISTORY_MESSAGES`, `AI_CHAT_MAX_TOOL_STEPS`,
+  `AI_ACTION_TTL_MINUTES`; `AI_CHAT_MAX_TOKENS` default 16000.
+- **Fixes found while verifying**: the Next.js proxy gzip-compressed the event stream and
+  delivered it in one chunk (answers did not stream) → `Cache-Control: no-store, no-transform`;
+  confirmation notes showed raw JSON → readable text with a link.
+
 ## In Progress
-- Nothing. Phase 5 is complete.
+- Nothing. Phase 6 is complete.
 
 ## Remaining
-- Phases 6–9 per `docs/DEVELOPMENT_PHASES.md`.
+- Phases 7–9 per `docs/DEVELOPMENT_PHASES.md`.
 - Role/permission editing UI and system settings (`/settings`) — Phase 8 (APIs exist).
 - E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
 
@@ -194,9 +222,33 @@ upload pipeline with content sniffing and store-then-commit (ADR-029); text extr
 worker (ADR-030); directory lookup for sharing (ADR-031); dynamic route pattern (ADR-032);
 task visibility predicate + capabilities (ADR-033); HR data in its own audited endpoint
 (ADR-034); account administration in the Employee Center (ADR-035); shared upload helpers and
-business-day due dates (ADR-036).
+business-day due dates (ADR-036); AI provider adapters (ADR-037); AI tools run as the user and
+changes need confirmation (ADR-038); ticket tools deferred to Phase 8 (ADR-039); chat streaming
+over server-sent events (ADR-040).
 
 ## Tests
+### Phase 6 verification — 2026-11-12
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (107 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **224 passed**, 1 skipped (Windows-only event-loop test) |
+| — `tests/unit/test_ai_providers.py` | ✅ 16: OpenAI-compatible request shape (system first, tool calls, tool results, system notes), streamed text + tool-call fragments + usage, invalid tool JSON, truncation, error mapping 401/404/429/400/503 without leaking bodies, connection failure; Anthropic (SDK over a mock transport): headers, beta fallback + `fallbacks`, no temperature/thinking, prompt caching, eager tool streaming, raw content replayed unchanged, parallel tool results in one message, streamed text + tool use + usage, refusal flag, plain endpoint for models without fallbacks, error mapping; provider factory |
+| — `tests/api/test_ai.py` | ✅ 17: 401/403 guards, disabled provider (status + 503), tools by permission (incl. a chat-only role with no tools), private sessions (404 for others; rename/delete), message validation, streamed answer + auto title + history replay, provider error (question kept, no half answer), refusal + step limit, rate limit 429, read tools see only the user's tasks (someone else's task is "not found", title never reaches the model, UI gets no raw tool data), unknown tool / bad JSON / invalid arguments answered with errors, create task only after confirmation (acted as the user, Bangkok due date, audit, never twice, system note reaches the model), reject + ownership, expiry, employees cannot propose assigning others, confirmation re-checks permissions (FAILED after reassignment), assignees cannot propose cancelling; stream sent with `no-transform` |
+| `alembic upgrade head` / `alembic check` / `downgrade 0005` + `upgrade` (**test** DB) | ✅ `0006 (head)`, no drift, round trip ok |
+| Frontend `vitest` | ✅ **66 passed** (new: SSE parsing, plain-text rendering + safe links, not-configured state, streaming + action confirmation with CSRF, stream errors, rate limit before streaming; nav test now uses a Phase 8 module) |
+| Frontend lint, typecheck, Prettier, `next build` | ✅ (`/assistant` prerendered) |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Browser (Docker stack, employee account, verification stub) | ✅ no real AI provider is available on this machine, so a temporary keyword-scripted OpenAI-compatible stub ran inside the worker container for this check only (`.env` restored to `disabled` afterwards). Page shows the model badge and suggestions; "สร้างงาน…" → tool chip "เตรียมสร้างงาน" + action card (summary with due date and "คุณเอง") → ยืนยัน → card "ดำเนินการแล้ว" with a link, task created; "งานของฉันมีอะไรบ้าง" → "ค้นหางานของคุณ" → answer listing the new task with a clickable `/tasks/<id>` link; stream timing through the Next proxy: 6 chunks ~50 ms apart after the `no-transform` fix (1 gzip chunk before); 375 px: no overflow, list behind "บทสนทนาทั้งหมด"; console clean; after restoring `.env`: "ยังไม่ได้ตั้งค่าผู้ให้บริการ AI", composer disabled, history still visible |
+
+### Phase 6 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Chat requests reach the backend; backend talks to the configured provider | ✅ both adapters tested against their wire formats; end-to-end through the real stack with an OpenAI-compatible endpoint (stub). Not yet run against a live Claude or Ollama model (none available here) |
+| Chat history persisted | ✅ API tests + browser (sessions, messages, actions, notes) |
+| AI can call permitted tools; tool permissions enforced; mutating actions need confirmation | ✅ 17 API tests + browser |
+| Provider errors handled safely; AI tests pass | ✅ error-mapping tests (no bodies or keys), 33 new backend + 6 new frontend tests |
+
 ### Phase 5 verification — 2026-11-11
 | Check (command) | Result |
 | --- | --- |
@@ -404,9 +456,17 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 20. Notifications for tasks are in-app only; there are no due-date reminders yet (Phase 8).
 21. Role/permission editing and `/settings` are not built yet (Phase 8); roles are assigned
     from the Employee Center.
+22. The assistant has not been run against a live model here (no Ollama or API key on this
+    machine); adapters are tested against their wire formats and the full stack against a
+    scripted stub. The Anthropic refusal-fallback beta is untested against the live API.
+23. Chat retention (`AI_CHAT_RETENTION_DAYS`) has no purge job yet (Phase 9); deleted chats are
+    soft-deleted.
+24. The assistant cannot search documents or company knowledge yet (Phase 7 RAG) and has no
+    ticket tools yet (Phase 8, ADR-039).
+25. Small local models may call tools poorly; choose a model with tool-calling support.
 
 ## Next Phase
-**Phase 6 — AI Assistant & Tool Calling**: see `docs/DEVELOPMENT_PHASES.md`.
+**Phase 7 — RAG Knowledge Base**: see `docs/DEVELOPMENT_PHASES.md` (needs an embedding provider, e.g. Ollama `bge-m3`).
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -419,7 +479,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 6 — AI ASSISTANT & TOOL CALLING as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 7 — RAG KNOWLEDGE BASE as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)

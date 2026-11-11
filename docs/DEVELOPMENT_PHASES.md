@@ -111,7 +111,7 @@ Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
 
 Deferred: role/permission editing UI and system settings (`/settings`) → Phase 8.
 
-## Phase 6 — AI assistant & tool calling ⬜
+## Phase 6 — AI assistant & tool calling ✅
 
 AI provider abstraction (OpenAI-compatible + Anthropic adapters), backend AI
 service, chat API (streaming where supported), chat sessions/history, chat UI,
@@ -121,11 +121,16 @@ user-confirmation workflow. Initial tools: `get_my_tasks`, `get_task_details`,
 tools only once Phase 8 ticket services exist, or ship a minimal ticket service
 here — decide and record in `DECISIONS.md`).
 
-Acceptance criteria
-- Chat requests reach the backend; backend talks to the configured provider.
-- Chat history persisted.
-- AI can call permitted tools; tool permissions enforced; mutating actions need confirmation.
-- Provider errors handled safely; AI tests pass.
+Delivered: migration `0006`, provider adapters (official `anthropic` SDK; OpenAI-compatible
+over HTTP), `/ai` API with server-sent-event streaming, tool registry + confirmation flow,
+`/assistant` page (ADR-037…040). Ticket tools move to Phase 8 with the ticket service
+(ADR-039).
+
+Acceptance criteria (verified 2026-11-12 — see `PROJECT_STATUS.md`)
+- [x] Chat requests reach the backend; backend talks to the configured provider.
+- [x] Chat history persisted.
+- [x] AI can call permitted tools; tool permissions enforced; mutating actions need confirmation.
+- [x] Provider errors handled safely; AI tests pass.
 
 ## Phase 7 — RAG knowledge base ⬜
 
