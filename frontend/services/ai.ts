@@ -41,6 +41,13 @@ export const actionSchema = z.object({
   created_at: z.string(),
 });
 
+export const citationSchema = z.object({
+  n: z.number().int().positive(),
+  document_id: z.string(),
+  title: z.string(),
+  page: z.number().int().nullable().optional(),
+});
+
 export const chatMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant", "tool", "system"]),
@@ -49,6 +56,7 @@ export const chatMessageSchema = z.object({
   tool_label: z.string().nullable().optional(),
   tool_ok: z.boolean().nullable().optional(),
   action_id: z.string().nullable().optional(),
+  citations: z.array(citationSchema).default([]),
   created_at: z.string(),
 });
 
@@ -63,6 +71,7 @@ export type ChatSessionDetail = z.infer<typeof chatSessionDetailSchema>;
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type AiAction = z.infer<typeof actionSchema>;
 export type ActionStatus = z.infer<typeof actionStatusSchema>;
+export type Citation = z.infer<typeof citationSchema>;
 
 /** Events of `POST /ai/sessions/{id}/messages` (server-sent events). */
 export const streamEventSchema = z.discriminatedUnion("event", [
@@ -84,7 +93,11 @@ export const streamEventSchema = z.discriminatedUnion("event", [
   z.object({ event: z.literal("action"), data: actionSchema }),
   z.object({
     event: z.literal("done"),
-    data: z.object({ message_id: z.string(), truncated: z.boolean() }),
+    data: z.object({
+      message_id: z.string(),
+      truncated: z.boolean(),
+      citations: z.array(citationSchema).default([]),
+    }),
   }),
   z.object({
     event: z.literal("error"),

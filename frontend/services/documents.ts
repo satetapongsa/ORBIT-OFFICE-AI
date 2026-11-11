@@ -17,6 +17,7 @@ export const visibilitySchema = z.enum(["PRIVATE", "DEPARTMENT", "COMPANY", "RES
 export const documentStatusSchema = z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]);
 export const fileTypeSchema = z.enum(["PDF", "DOCX", "XLSX", "TXT"]);
 export const processingStatusSchema = z.enum(["PENDING", "PROCESSING", "READY", "FAILED"]);
+export const indexStatusSchema = z.enum(["PENDING", "INDEXING", "READY", "FAILED", "SKIPPED"]);
 export const accessLevelSchema = z.enum(["VIEW", "EDIT", "MANAGE"]);
 export const principalTypeSchema = z.enum(["USER", "DEPARTMENT", "ROLE"]);
 
@@ -29,6 +30,7 @@ const versionSummarySchema = z.object({
   file_type: fileTypeSchema,
   size_bytes: z.number().int().nonnegative(),
   processing_status: processingStatusSchema,
+  index_status: indexStatusSchema,
 });
 
 export const versionSchema = versionSummarySchema.extend({
@@ -39,6 +41,9 @@ export const versionSchema = versionSummarySchema.extend({
   page_count: z.number().int().nullable(),
   char_count: z.number().int().nullable(),
   processed_at: z.string().nullable(),
+  index_error: z.string().nullable(),
+  chunk_count: z.number().int().nullable(),
+  indexed_at: z.string().nullable(),
   created_at: z.string(),
 });
 
@@ -108,6 +113,23 @@ export const historyItemSchema = z.object({
   details: z.record(z.string(), z.unknown()),
 });
 
+export const contentSearchSchema = z.object({
+  query: z.string(),
+  mode: z.enum(["hybrid", "keyword"]),
+  degraded: z.boolean(),
+  results: z.array(
+    z.object({
+      document_id: z.string(),
+      title: z.string(),
+      category: categorySchema,
+      version_number: z.number().int(),
+      page: z.number().int().nullable(),
+      snippet: z.string(),
+      score: z.number(),
+    }),
+  ),
+});
+
 export const directoryUserSchema = z.object({
   id: z.string(),
   display_name: z.string(),
@@ -133,6 +155,8 @@ export type DocumentAcl = z.infer<typeof aclSchema>;
 export type DocumentText = z.infer<typeof documentTextSchema>;
 export type HistoryItem = z.infer<typeof historyItemSchema>;
 export type DirectoryUser = z.infer<typeof directoryUserSchema>;
+export type IndexStatus = z.infer<typeof indexStatusSchema>;
+export type ContentSearchResult = z.infer<typeof contentSearchSchema>;
 
 export interface DocumentListParams {
   q?: string;
@@ -174,6 +198,7 @@ export const documentQueryKeys = {
   text: (id: string, versionId: string | null) => ["documents", "text", id, versionId] as const,
   acl: (id: string) => ["documents", "acl", id] as const,
   history: (id: string) => ["documents", "history", id] as const,
+  content: (q: string) => ["documents", "content-search", q] as const,
 };
 
 export function listDocuments(params: DocumentListParams, signal?: AbortSignal) {
@@ -273,6 +298,15 @@ export function downloadDocument(id: string, versionId?: string, fallbackName?: 
   return apiDownload(`/documents/${encodeURIComponent(id)}/download`, {
     query: { version_id: versionId },
     fallbackName,
+  });
+}
+
+/** Search inside the documents the user may read (permission-filtered on the server). */
+export function searchDocumentContent(q: string, signal?: AbortSignal) {
+  return apiRequest("/documents/search", {
+    schema: contentSearchSchema,
+    signal,
+    query: { q, limit: 10 },
   });
 }
 
