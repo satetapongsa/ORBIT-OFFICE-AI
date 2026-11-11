@@ -161,6 +161,18 @@ is recreated (`docker compose up -d backend`).
 
 Check with `GET /api/v1/ai/status` (or the "ผู้ช่วย AI" page header shows the model).
 
+**Semantic document search (Phase 7, optional):** `ollama pull bge-m3`, then
+`AI_EMBEDDING_PROVIDER=openai_compatible`, `AI_EMBEDDING_MODEL=bge-m3`,
+`AI_EMBEDDING_BASE_URL=http://host.docker.internal:11434/v1` (1024 dimensions — other sizes are
+refused). Recreate backend **and** worker, then index existing documents:
+
+```bash
+docker compose exec backend python -m app.cli reindex-documents --all
+```
+
+Without an embedding provider, content search and the assistant still work with keyword
+(trigram) search.
+
 ## 6. Troubleshooting
 
 | Symptom | Cause / fix |
@@ -191,6 +203,9 @@ Check with `GET /api/v1/ai/status` (or the "ผู้ช่วย AI" page heade
 | Assistant says "ผู้ให้บริการ AI ไม่ตอบสนอง" | Provider unreachable or timed out (`AI_REQUEST_TIMEOUT_SECONDS`); from Docker use `host.docker.internal` for host services. `docker compose logs backend` shows the status code (never the body). |
 | "ส่งข้อความถี่เกินไป" (429) | Per-user chat limit `AI_CHAT_RATE_LIMIT_MESSAGES` per `AI_CHAT_RATE_LIMIT_WINDOW_SECONDS`. |
 | A proposed change shows "หมดเวลายืนยัน" | Actions expire after `AI_ACTION_TTL_MINUTES`; ask the assistant to prepare it again. |
+| Content search finds nothing in an old document | It was uploaded before Phase 7 or the worker was down: `docker compose exec backend python -m app.cli reindex-documents`. The version's "ค้นหาในเนื้อหาได้ / รอสร้างดัชนีค้นหา" label shows the state. |
+| Version shows "ค้นหาได้เฉพาะตามคำ" (index FAILED) | The embedding provider failed during indexing; fix it and run `reindex-documents`. |
+| Backend refuses to start: `AI_EMBEDDING_DIMENSIONS must be 1024` | The vector column is fixed at 1024 (ADR-042); use a 1024-dimension model such as `bge-m3`. |
 | A task gives "ไม่พบงาน" although it exists | Intended when you cannot see it (ADR-033): you are not the creator/assignee and do not manage that department. |
 | Assigning a colleague fails with "มอบหมายได้เฉพาะพนักงานในแผนกของงาน" | Without `tasks:manage_all` assignees must be in the task's department; check the person's department in the Employee Center. |
 | Employee profile shows no "ข้อมูลบุคคล" card | Intended without `employees:read_sensitive` (except on your own profile). |

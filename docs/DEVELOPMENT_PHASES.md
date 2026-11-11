@@ -132,17 +132,23 @@ Acceptance criteria (verified 2026-11-12 — see `PROJECT_STATUS.md`)
 - [x] AI can call permitted tools; tool permissions enforced; mutating actions need confirmation.
 - [x] Provider errors handled safely; AI tests pass.
 
-## Phase 7 — RAG knowledge base ⬜
+## Phase 7 — RAG knowledge base ✅
 
 Ingestion pipeline (extraction → cleaning → chunking → embeddings → pgvector),
 semantic retrieval with metadata and **permission filtering in SQL**, grounded
 answers with citations, insufficient-evidence handling, document summarization.
 
-Acceptance criteria
-- Uploaded documents can be indexed.
-- Semantic search returns relevant authorized documents.
-- Answers include source references; insufficient evidence reported.
-- Unauthorized chunks are never passed to the LLM; tests verify cross-permission isolation.
+Delivered: migration `0007` (`document_chunks` with `vector(1024)`, version index status,
+chat citations), chunking + embedding pipeline in the worker (keyword index without an
+embedding provider), hybrid retrieval with the ACL in SQL, `GET /documents/search`,
+assistant tools `search_documents` / `read_document` with `[n]` citations, content search in
+the Document Center, "สรุปด้วยผู้ช่วย AI", `reindex-documents` CLI (ADR-041…043).
+
+Acceptance criteria (verified 2026-11-12 — see `PROJECT_STATUS.md`)
+- [x] Uploaded documents can be indexed.
+- [x] Semantic search returns relevant authorized documents.
+- [x] Answers include source references; insufficient evidence reported.
+- [x] Unauthorized chunks are never passed to the LLM; tests verify cross-permission isolation.
 
 ## Phase 8 — Helpdesk, notifications & analytics ⬜
 

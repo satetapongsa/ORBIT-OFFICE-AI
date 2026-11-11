@@ -349,3 +349,33 @@ database session. Responses carry `Cache-Control: no-store, no-transform` and
 `X-Accel-Buffering: no` — without `no-transform` the Next.js proxy gzip-compressed the stream
 and delivered it in one piece.
 **Why.** `EventSource` cannot POST or send CSRF headers; SSE is simple and proxy-friendly.
+
+## ADR-041 — Retrieval: ACL in SQL, current version only, hybrid ranking (2026-11-12)
+**Decision.** Chunks carry no ACL copy. Every retrieval query joins `documents` with
+`accessible_documents_condition` and `chunk.version = documents.current_version_id` in the
+same statement that ranks passages. Ranking is hybrid: pgvector cosine similarity (HNSW with
+`iterative_scan = relaxed_order`, results below 0.25 dropped) fused with pg_trgm word
+similarity by reciprocal rank (k = 60). Without an embedding provider, or when the query
+cannot be embedded, keyword search alone answers (`mode: keyword`, `degraded` flag). Older
+versions' chunks are deleted when a newer version is indexed.
+**Why.** Permission changes apply instantly and unauthorised text is never even selected;
+keyword search keeps the feature useful (and Thai-friendly) on machines without an embedding
+model.
+
+## ADR-042 — Fixed embedding dimension and re-indexing (2026-11-12)
+**Decision.** The vector column is `vector(1024)` (e.g. `bge-m3`); settings refuse another
+`AI_EMBEDDING_DIMENSIONS`. Each chunk stores `embedding_model` and queries only use vectors of
+the configured model. `python -m app.cli reindex-documents [--all]` queues re-indexing (after
+enabling or changing the embedding provider). Indexing runs in the worker right after text
+extraction; an embedding failure keeps the chunks (keyword search) and marks the version
+`FAILED`.
+**Why.** pgvector indexes need a fixed dimension; mixing models in one space would rank
+nonsense.
+
+## ADR-043 — RAG through tools, with citations (2026-11-12)
+**Decision.** The assistant reaches documents only through `search_documents` and
+`read_document` (12,000 characters). Passages get turn-scoped source numbers; the final answer
+must cite them as `[n]`, and only cited sources are stored and shown under the answer. An
+empty search returns an explicit "no evidence" instruction.
+**Why.** The model decides when knowledge is needed, while every passage still comes through
+the permission-filtered path and stays attributable.

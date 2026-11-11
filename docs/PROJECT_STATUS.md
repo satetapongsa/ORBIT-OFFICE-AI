@@ -1,6 +1,6 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 6 — AI Assistant & Tool Calling — ✅ **COMPLETE** (verified 2026-11-12). Next: Phase 7.
+**Current Phase:** Phase 7 — RAG Knowledge Base — ✅ **COMPLETE** (verified 2026-11-12). Next: Phase 8.
 **Last Updated:** 2026-11-12
 
 ## Completed
@@ -199,11 +199,37 @@
   delivered it in one chunk (answers did not stream) → `Cache-Control: no-store, no-transform`;
   confirmation notes showed raw JSON → readable text with a link.
 
+### Phase 7 — RAG Knowledge Base
+- **Data model** (migration `0007`): `document_chunks` (passage text, page, `vector(1024)`
+  embedding + model, HNSW and trigram indexes), version index status/error/count/time,
+  `chat_messages.citations`.
+- **Indexing** (ADR-042): after text extraction the worker chunks the text (≤ `RAG_CHUNK_SIZE`
+  characters, `RAG_CHUNK_OVERLAP` overlap, cuts at page/paragraph/line/sentence boundaries,
+  PDF page numbers from form feeds) and embeds it when an embedding provider is configured
+  (OpenAI-compatible `/embeddings`, batches of 32, 1024 dimensions enforced). Embedding
+  failures keep the chunks for keyword search and mark the version `FAILED`; text-less
+  versions are `SKIPPED`; older versions' chunks are removed. `python -m app.cli
+  reindex-documents [--all]` and Celery task `documents.index_version`.
+- **Retrieval** (ADR-041): ACL predicate and current-version filter inside the ranking SQL;
+  hybrid semantic + keyword ranking (reciprocal rank fusion), keyword-only without embeddings or
+  when the query cannot be embedded (`degraded`).
+- **API**: `GET /documents/search` (best passage per accessible document); version responses
+  include index status; chat `done` events and stored answers carry citations.
+- **Assistant** (ADR-043): tools `search_documents` (numbered passages) and `read_document`
+  (12,000 characters, for summaries); answers cite `[n]`, only cited sources are stored; an
+  empty search tells the model to report "no evidence"; prompt rules for untrusted passages.
+- **Frontend**: Document Center "ค้นหาในเนื้อหา" mode (passages with page and category, plain
+  text, mode note), index status per version, "สรุปด้วยผู้ช่วย AI" (pre-fills the assistant,
+  nothing sent automatically), "แหล่งอ้างอิง" under assistant answers with links.
+- **Fixes found while verifying**: overlapping passages started mid-paragraph or lost the
+  overlap after a paragraph cut, and passages could straddle PDF pages → overlap starts at a
+  line inside real content and never crosses a page break.
+
 ## In Progress
-- Nothing. Phase 6 is complete.
+- Nothing. Phase 7 is complete.
 
 ## Remaining
-- Phases 7–9 per `docs/DEVELOPMENT_PHASES.md`.
+- Phases 8–9 per `docs/DEVELOPMENT_PHASES.md`.
 - Role/permission editing UI and system settings (`/settings`) — Phase 8 (APIs exist).
 - E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
 
@@ -224,9 +250,33 @@ task visibility predicate + capabilities (ADR-033); HR data in its own audited e
 (ADR-034); account administration in the Employee Center (ADR-035); shared upload helpers and
 business-day due dates (ADR-036); AI provider adapters (ADR-037); AI tools run as the user and
 changes need confirmation (ADR-038); ticket tools deferred to Phase 8 (ADR-039); chat streaming
-over server-sent events (ADR-040).
+over server-sent events (ADR-040); retrieval with the ACL in SQL and hybrid ranking (ADR-041);
+fixed 1024-dimension embeddings and re-indexing (ADR-042); RAG through tools with citations
+(ADR-043).
 
 ## Tests
+### Phase 7 verification — 2026-11-12
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (113 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **252 passed**, 1 skipped (Windows-only event-loop test) |
+| — `tests/unit/test_rag_units.py` | ✅ 16: chunk sizes/overlap/paragraph cuts/no text lost, text without breaks, PDF page numbers, invalid settings, vector literal, embedding batching + request shape, async embedding, failures (status, bad body, wrong dimension, wrong count, connection), provider settings + 1024-dimension rule |
+| — `tests/api/test_rag.py` | ✅ 12: upload indexed + keyword search (Thai), hybrid semantic search ranks the right document, embedding failure → keyword fallback + `degraded` + re-index recovers, text-less version SKIPPED, PDF pages, **isolation** (private/department documents invisible to others, `documents:manage` override, ACL grant and revoke apply immediately, deleted documents disappear), only the current version is searched, `documents:read` required, assistant answers only from permitted passages (private passage never in the model's input) with stored citations, "no evidence", `read_document` respects access, document tools need `documents:read` |
+| `alembic upgrade head` / `alembic check` / `downgrade 0006` + `upgrade` (**test** DB) | ✅ `0007 (head)`, no drift (pgvector type not reflected — warning only), round trip ok |
+| Frontend `vitest` | ✅ **70 passed** (new: content search results + plain-text snippets + empty/degraded states, index status label, cited sources under answers, `?prompt=` pre-fill without sending) |
+| Frontend lint, typecheck, Prettier, `next build` | ✅ |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Browser (Docker stack, real Celery worker, verification stub for chat + embeddings) | ✅ `reindex-documents` indexed the existing "นโยบาย WFH 2569" through the worker with embeddings; employee: "ค้นหาในเนื้อหา" → "ทำงานที่บ้านได้กี่วัน" → the WFH policy, mode "ค้นหาตามความหมายและคำ"; assistant → tool "ค้นหาในเอกสาร" → answer ending in `[1]` with "แหล่งอ้างอิง [1] นโยบาย WFH 2569" linking to the document; **IT account (other department)**: content search 0 results, assistant "ไม่พบข้อมูล…" and no WFH text anywhere in the stream; 375 px no overflow; `.env` restored to `disabled` and documents re-indexed without the stub vectors |
+
+### Phase 7 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Uploaded documents can be indexed | ✅ automatic after extraction (worker) + `reindex-documents`; tests + browser |
+| Semantic search returns relevant authorized documents | ✅ hybrid ranking tests (deterministic test embeddings) + browser (stub embeddings). Not yet measured with a real embedding model (none available here) |
+| Answers include source references; insufficient evidence reported | ✅ citations stored and shown; "no evidence" path tested |
+| Unauthorized chunks are never passed to the LLM; tests verify cross-permission isolation | ✅ ACL in the retrieval SQL; isolation tests on search and on the model's input; browser check with a second department |
+
 ### Phase 6 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
@@ -464,9 +514,18 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 24. The assistant cannot search documents or company knowledge yet (Phase 7 RAG) and has no
     ticket tools yet (Phase 8, ADR-039).
 25. Small local models may call tools poorly; choose a model with tool-calling support.
+26. Retrieval quality has only been checked with deterministic test embeddings and a stub; real
+    relevance depends on the embedding model (recommended `bge-m3`, 1024 dimensions) and is
+    unmeasured. Changing to a model with another dimension needs a migration (ADR-042).
+27. No OCR: scanned PDFs are `SKIPPED` for search. Documents uploaded before Phase 7 need
+    `reindex-documents` (done for the dev database).
+28. `read_document` gives the model the first 12,000 characters; summaries of longer documents
+    cover only the beginning (the model is told to say so).
+29. The embedding provider receives document text during indexing; use a local provider if
+    documents must not leave your servers.
 
 ## Next Phase
-**Phase 7 — RAG Knowledge Base**: see `docs/DEVELOPMENT_PHASES.md` (needs an embedding provider, e.g. Ollama `bge-m3`).
+**Phase 8 — Helpdesk, Notifications & Analytics** (+ ticket tools for the assistant, role/permission editing UI): see `docs/DEVELOPMENT_PHASES.md`.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -479,7 +538,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 7 — RAG KNOWLEDGE BASE as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 8 — HELPDESK, NOTIFICATIONS & ANALYTICS as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)
