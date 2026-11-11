@@ -20,6 +20,7 @@ from app.models.identity import (
     UserRole,
     role_permissions,
 )
+from app.models.notification import Notification, NotificationType
 
 __all__ = [
     "AccessLevel",
@@ -31,6 +32,8 @@ __all__ = [
     "DocumentStatus",
     "DocumentVisibility",
     "EmploymentStatus",
+    "Notification",
+    "NotificationType",
     "PasswordResetToken",
     "Permission",
     "PrincipalType",
