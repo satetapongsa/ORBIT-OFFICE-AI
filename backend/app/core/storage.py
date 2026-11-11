@@ -1,13 +1,14 @@
 """S3-compatible object storage client (MinIO in development, any S3 API in production).
 
 boto3 is synchronous; async callers must use ``anyio.to_thread.run_sync``.
-Document upload/download operations are added in Phase 4 on top of this client.
+The bucket is private: objects are only reachable through the API after an ACL check.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from functools import lru_cache
-from typing import Any
+from typing import Any, BinaryIO
 
 import boto3
 from botocore.config import Config
@@ -17,6 +18,23 @@ from app.core.config import Settings, get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class ObjectStream:
+    """Chunk iterator over an S3 response body; always closes the connection."""
+
+    def __init__(self, body: Any, chunk_size: int = 64 * 1024) -> None:
+        self._body = body
+        self._chunk_size = chunk_size
+
+    def __iter__(self) -> Iterator[bytes]:
+        try:
+            yield from self._body.iter_chunks(self._chunk_size)
+        finally:
+            self._body.close()
+
+    def close(self) -> None:
+        self._body.close()
 
 
 class ObjectStorage:
@@ -55,6 +73,29 @@ class ObjectStorage:
         self._client.create_bucket(Bucket=self.bucket)
         logger.info("storage_bucket_created", bucket=self.bucket)
         return True
+
+    # --- Objects ---------------------------------------------------------------------
+
+    def put_object(self, key: str, fileobj: BinaryIO, *, content_type: str, sha256: str) -> None:
+        fileobj.seek(0)
+        self._client.upload_fileobj(
+            fileobj,
+            self.bucket,
+            key,
+            ExtraArgs={"ContentType": content_type, "Metadata": {"sha256": sha256}},
+        )
+
+    def download_to(self, key: str, fileobj: BinaryIO) -> None:
+        self._client.download_fileobj(self.bucket, key, fileobj)
+        fileobj.seek(0)
+
+    def open_object(self, key: str) -> ObjectStream:
+        """Open an object for streaming. Errors (missing object, storage down) raise here,
+        before any response bytes are sent."""
+        return ObjectStream(self._client.get_object(Bucket=self.bucket, Key=key)["Body"])
+
+    def delete_object(self, key: str) -> None:
+        self._client.delete_object(Bucket=self.bucket, Key=key)
 
 
 @lru_cache
