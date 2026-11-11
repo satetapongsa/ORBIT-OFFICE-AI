@@ -59,13 +59,17 @@ migration; the rest is the plan.
 | password_changed_at | timestamptz NULL | access tokens issued before it are rejected |
 | deleted_at | timestamptz NULL | |
 
-Index: `ix_users_department_id`, trigram index on display name (Phase 5).
+Index: `ix_users_department_id`, trigram index on display name (`ix_users_display_name_trgm`, migration `0005`).
 
-### `employee_hr_profiles` (Phase 5) — sensitive HR data split out
+### `employee_hr_profiles` (Phase 5, implemented) — sensitive HR data split out
 Separate table so ordinary directory queries can never accidentally select
-sensitive columns: `user_id` (PK/FK), `date_of_birth`, `national_id_last4`,
-`personal_phone`, `personal_email`, `address`, `hire_date`, `employment_type`,
-`emergency_contact` (JSONB). Readable only with `employees:read_sensitive`.
+sensitive columns: `user_id` (PK/FK CASCADE), `date_of_birth`, `national_id_last4`
+(CHECK `^[0-9]{4}$` — the full national ID is never stored), `personal_phone`,
+`personal_email`, `address`, `hire_date`, `employment_type` (`FULL_TIME`, `PART_TIME`,
+`CONTRACT`, `INTERN`, CHECK), `emergency_contact` (JSONB `{name, relationship, phone}`),
+`updated_by`, timestamps. Readable by the employee themself or with
+`employees:read_sensitive` (audited); written with `employees:manage` +
+`employees:read_sensitive`. Only `app/repositories/employees.get_hr_profile` reads it.
 
 ### `roles`, `permissions`, `user_roles`, `role_permissions` (Phase 2, implemented)
 | table | columns |
@@ -174,17 +178,20 @@ at query time so permission changes take effect immediately (see `DECISIONS.md`)
 Only chunks of each document's `current_version_id` with `READY` status are
 searchable.
 
-## 4. Tasks (Phase 5)
+## 4. Tasks (Phase 5, implemented — migration `0005`)
 
 | table | key columns |
 | --- | --- |
-| `tasks` | id, title, description, status (`TODO`,`IN_PROGRESS`,`REVIEW`,`COMPLETED`,`CANCELLED`), priority (`LOW`,`MEDIUM`,`HIGH`,`URGENT`), due_at NULL, created_by FK, department_id FK NULL, completed_at NULL, deleted_at |
-| `task_assignees` | task_id FK CASCADE, user_id FK CASCADE, assigned_by, created_at — PK (task_id, user_id) |
-| `task_comments` | id, task_id FK CASCADE, author_id FK, body, created_at, updated_at, edited flag |
-| `task_attachments` | id, task_id FK CASCADE, storage_key, original_filename, mime_type, size_bytes, uploaded_by |
-| `task_events` | id, task_id FK CASCADE, actor_id, event_type (`CREATED`,`STATUS_CHANGED`,`ASSIGNED`,…), from_value, to_value, created_at — task history |
+| `tasks` | id, title (300), description, status (`TODO`,`IN_PROGRESS`,`REVIEW`,`COMPLETED`,`CANCELLED`, CHECK), priority (`LOW`,`MEDIUM`,`HIGH`,`URGENT`, CHECK), due_at NULL, created_by FK users RESTRICT, department_id FK SET NULL (the owning team), completed_at NULL, timestamps, deleted_at |
+| `task_assignees` | task_id FK CASCADE, user_id FK CASCADE, assigned_by FK SET NULL, created_at — PK (task_id, user_id) |
+| `task_comments` | id, task_id FK CASCADE, author_id FK SET NULL, body (CHECK 1–5000 chars), created_at, updated_at, edited_at NULL |
+| `task_attachments` | id, task_id FK CASCADE, storage_key unique (`tasks/{task_id}/{attachment_id}`, server-generated), original_filename, file_type (PDF/DOCX/XLSX/TXT, CHECK), mime_type, size_bytes, sha256, uploaded_by, created_at |
+| `task_events` | id, task_id FK CASCADE, actor_id FK SET NULL, event_type (`CREATED`,`UPDATED`,`STATUS_CHANGED`,`ASSIGNED`,`UNASSIGNED`,`COMMENTED`,`ATTACHMENT_ADDED`,`ATTACHMENT_REMOVED`, CHECK), from_value, to_value, created_at — user-visible timeline (security events also go to `audit_logs`) |
 
-Indexes: `(status, due_at)` for overdue queries, `task_assignees(user_id)`.
+Indexes: `(status, due_at)` for overdue queries, `tasks(department_id)`, `tasks(created_by)`,
+`tasks(updated_at)`, trigram on `tasks.title`, `task_assignees(user_id)`,
+`task_comments(task_id, created_at)`, `task_events(task_id, created_at)`. Visibility is the
+single predicate `app/repositories/task_access.visible_tasks_condition` (ADR-033).
 
 ## 5. AI assistant (Phase 6)
 
@@ -213,7 +220,7 @@ expired sessions.
 | --- | --- | --- |
 | id | uuid PK | |
 | user_id | uuid FK → users ON DELETE CASCADE | the only reader |
-| type | varchar(20) | `SECURITY`, `ACCOUNT`, `SYSTEM`, `DOCUMENT` (CHECK; `DOCUMENT` added in `0004`); later phases add `TASK`, `TICKET`, … by migration |
+| type | varchar(20) | `SECURITY`, `ACCOUNT`, `SYSTEM`, `DOCUMENT`, `TASK` (CHECK; `DOCUMENT` added in `0004`, `TASK` in `0005`); later phases add `TICKET`, … by migration |
 | title | varchar(200) | Thai text written by the backend |
 | body | text | may be empty |
 | link_url | varchar(500) NULL | CHECK: relative in-app path (`/…`, never `//…`) |

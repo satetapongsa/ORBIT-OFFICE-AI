@@ -110,6 +110,43 @@ Unknown and inaccessible documents both return `404`. The effective level is com
 the same predicate (`effective_access_level`), so it can never disagree with listings.
 Granting a USER access (or raising it) sends that user a `DOCUMENT` notification.
 
+## 3a. Task visibility and capabilities (Phase 5, implemented)
+
+A user sees a live task when **any** of these holds (one SQL predicate,
+`app/repositories/task_access.visible_tasks_condition`, used by every task query and the
+dashboard): they hold `tasks:manage_all`; they hold `tasks:read_own` and created the task or
+are assigned to it; they hold `tasks:read_department` or `tasks:manage_department` and the
+task belongs to their department. A *manager* of a task holds `tasks:manage_all`, or
+`tasks:manage_department` for a task of their own department.
+
+| operation | requires |
+| --- | --- |
+| see, comment, download attachments | visible |
+| create | `tasks:create`; another department needs `tasks:manage_all` |
+| assign someone other than yourself | `tasks:assign` + (creator or manager); assignees must be active and in the task's department unless `tasks:manage_all` |
+| edit, cancel, delete (soft) | creator or manager |
+| move to another department | `tasks:manage_all` |
+| change status (not cancel), attach files | creator, assignee or manager |
+| edit a comment / delete a comment | author / author or manager |
+| remove an attachment | uploader, creator or manager |
+
+Unknown and invisible tasks both answer `404`. The assignee picker
+(`GET /tasks/assignable-users`) only lists people the caller may assign. Comments and
+descriptions are plain text in the UI (never HTML).
+
+## 3b. Employee data (Phase 5, implemented)
+
+- Directory (`employees:read_directory`): active people only, work contact fields (name,
+  title, department, work e-mail/phone). Suspended accounts need `users:read`.
+- Account fields (status, roles, last sign-in) are added only for `users:read`; account
+  changes go through the existing `/users` API and its guards (§2).
+- Sensitive HR data lives in `employee_hr_profiles` and has its own endpoint: readable by the
+  employee themself or with `employees:read_sensitive`; every read by someone else writes
+  `employee.hr_profile_viewed`. Writing needs `employees:manage` + `employees:read_sensitive`;
+  `employee.hr_profile_updated` stores changed field names, never values. Only the last four
+  digits of the national ID are accepted (DB `CHECK`). The UI loads someone else's record only
+  after an explicit "แสดงข้อมูลบุคคล" click.
+
 ## 4. File upload security (Phase 4, implemented)
 
 - Allow-list of extensions **and** content sniffing (PDF magic, OOXML archive layout —
@@ -121,7 +158,8 @@ Granting a USER access (or raising it) sends that user a `DOCUMENT` notification
   measures the real bytes while hashing.
 - Zip-bomb / archive guard for DOCX/XLSX (entry count, total uncompressed size, per-entry
   ratio, encrypted entries, `..`/absolute paths) — at upload and again in the worker.
-- Storage keys are server-generated (`documents/{document_id}/{version_id}`);
+- Storage keys are server-generated (`documents/{document_id}/{version_id}`,
+  `tasks/{task_id}/{attachment_id}` — task attachments share this pipeline);
   user filenames are sanitised and stored only as metadata.
 - Downloads stream through the backend after an ACL check (or short-lived
   presigned URLs generated only after the check). Bucket is private.
@@ -187,8 +225,13 @@ Document events (Phase 4): `document.uploaded`, `document.version_uploaded`,
 `document.updated`, `document.deleted`, `document.downloaded` (every download),
 `document.acl_changed`, `document.reprocess_requested`.
 
-Planned events (later phases): task
-updates, ticket status changes, AI action confirmations, system configuration changes.
+Task events (Phase 5): `task.created`, `task.updated`, `task.status_changed`,
+`task.assignees_changed`, `task.deleted`, `task.attachment_added`, `task.attachment_removed`,
+`task.attachment_downloaded`. Employee events: `employee.hr_profile_viewed`,
+`employee.hr_profile_updated` (field names only).
+
+Planned events (later phases): ticket status changes, AI action confirmations, system
+configuration changes.
 Every entry stores actor, IP, user agent and request ID.
 
 ## 9. Reporting a vulnerability

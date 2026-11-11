@@ -118,7 +118,7 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `PUT /roles/{id}/permissions` | `roles:manage` | cannot grant what you do not hold; `ADMIN` is locked |
 | `DELETE /roles/{id}` | `roles:manage` | custom, unassigned roles only |
 | `GET /audit-logs` | `audit:read` | filters `action`, `actor_id`, `entity_type`, `entity_id`, `occurred_from`, `occurred_to` |
-| `GET /dashboard/summary` | signed in | personal sections always; `documents` needs `documents:read` (ACL-counted), `organization` needs `users:read`, `security` needs `audit:read` — otherwise `null`. Days are grouped in `APP_TIMEZONE` (Phase 3) |
+| `GET /dashboard/summary` | signed in | personal sections always; `documents` needs `documents:read` (ACL-counted), `tasks` needs `tasks:read_own` (my open assigned tasks: counts + 5 earliest due), `organization` needs `users:read`, `security` needs `audit:read` — otherwise `null`. Days are grouped in `APP_TIMEZONE` (Phase 3) |
 | `GET /documents` | VIEW (ACL predicate) | `q` (title/description, wildcards escaped), `category`, `visibility`, `status`, `processing_status`, `department_id`, `mine`, `sort` = `updated`/`created`/`title`, `page`, `page_size` |
 | `POST /documents` | `documents:upload` | multipart: `file` + `title`, `description`, `category`, `visibility`, `department_id` (own department unless `documents:manage`); `201` detail; `413` too large, `415` unsupported/mismatched type, `422` empty/unsafe file, `503` storage down |
 | `GET /documents/{id}` | VIEW | detail + `access_level`, `capabilities`, `versions`; `404` for unknown **and** inaccessible |
@@ -131,6 +131,21 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `GET /documents/{id}/acl`, `PUT /documents/{id}/acl` | MANAGE, or VIEW + `documents:manage_access` | replace explicit grants (USER/DEPARTMENT/ROLE × VIEW/EDIT/MANAGE); `422` duplicates/owner/unknown principal |
 | `GET /documents/{id}/history` | MANAGE, or VIEW + `audit:read` | last 100 audit events of the document |
 | `GET /directory/users` | `employees:read_directory` | `q`, `limit` ≤ 50; id, display name, job title, department only |
+| `GET /tasks` | any of `tasks:read_own`/`read_department`/`manage_department`/`manage_all` | visibility predicate (ADR-033); `scope` = `all`/`assigned`/`created`/`department` (department needs a department permission), `q`, `status`, `open_only`, `priority`, `assignee_id`, `overdue`, `sort` = `due`/`priority`/`updated`/`created`, `page`, `page_size` |
+| `POST /tasks` | `tasks:create` | `title`, `description`, `priority`, `due_at` (timezone required), `assignee_ids` (empty = creator; others need `tasks:assign`; same department unless `tasks:manage_all`), `department_id` (own unless `manage_all`); `201` detail |
+| `GET /tasks/assignable-users` | task reader | `q`, `limit` ≤ 50; everyone (`manage_all`), own department (`tasks:assign`), otherwise only yourself |
+| `GET /tasks/{id}` | visible | detail + `capabilities`; `404` for unknown **and** invisible |
+| `PATCH /tasks/{id}` | creator or manager | title, description, priority, `due_at` (null clears); `department_id` needs `tasks:manage_all` |
+| `POST /tasks/{id}/status` | creator, assignee or manager (`CANCELLED`: creator or manager) | sets/clears `completed_at`; notifies creator + assignees |
+| `PUT /tasks/{id}/assignees` | manager, or creator with `tasks:assign` | replace; added people are notified |
+| `DELETE /tasks/{id}` | creator or manager | soft delete; `204` |
+| `GET`/`POST /tasks/{id}/comments`, `PATCH`/`DELETE …/comments/{cid}` | visible (edit: author; delete: author or manager) | body 1–5000 chars; returns the thread; new comments notify creator + assignees |
+| `GET`/`POST /tasks/{id}/attachments`, `GET …/{aid}/download`, `DELETE …/{aid}` | visible (upload: creator/assignee/manager; delete: uploader/creator/manager) | same upload pipeline as documents (ADR-029), max 20 per task, downloads audited |
+| `GET /tasks/{id}/history` | visible | task timeline (`task_events`, newest first, ≤ 200) |
+| `GET /employees` | `employees:read_directory` | active people; `q` (name/title/e-mail/code), `department_id`, `include_inactive` (needs `users:read`), `page`, `page_size` (default 24) — work contact fields only |
+| `GET /employees/{id}` | `employees:read_directory` | directory fields + department manager + `account` (with `users:read`, else `null`) + `capabilities`; inactive people `404` without `users:read` |
+| `GET /employees/{id}/hr` | yourself, or `employees:read_sensitive` | HR record (`exists: false` when empty); reads by others are audited |
+| `PUT /employees/{id}/hr` | `employees:manage` + `employees:read_sensitive` | full replacement; national ID last 4 digits only; audit keeps field names, never values |
 | `GET /notifications` | signed in (own only) | `page`, `page_size` (≤100, default 20), `unread_only`; response adds `unread_count` |
 | `GET /notifications/unread-count` | signed in (own only) | `{unread_count}` |
 | `POST /notifications/{id}/read` | signed in + CSRF | idempotent; `404` for someone else's notification |
