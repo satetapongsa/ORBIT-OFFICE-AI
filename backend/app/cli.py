@@ -45,10 +45,35 @@ def _seed_dev() -> int:
     return 0
 
 
+def _reindex(include_ready: bool) -> int:
+    """Queue search indexing for current document versions (after enabling or changing the
+    embedding provider, or to backfill documents uploaded before Phase 7)."""
+    from app.core.db import sync_session_scope
+    from app.services.documents.indexing import versions_to_index
+    from app.workers.celery_app import celery_app
+
+    with sync_session_scope() as session:
+        ids = versions_to_index(session, include_ready=include_ready)
+    for version_id in ids:
+        celery_app.send_task(
+            "documents.index_version",
+            args=[str(version_id)],
+            kwargs={"force": True},
+            queue="documents",
+        )
+    print(f"reindex-documents: queued {len(ids)} version(s)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
-    parser.add_argument("command", choices=["sync-rbac", "seed-dev"])
+    parser.add_argument("command", choices=["sync-rbac", "seed-dev", "reindex-documents"])
+    parser.add_argument(
+        "--all", action="store_true", help="reindex-documents: also rebuild READY indexes"
+    )
     args = parser.parse_args(argv)
+    if args.command == "reindex-documents":
+        return _reindex(include_ready=args.all)
     return _sync_rbac() if args.command == "sync-rbac" else _seed_dev()
 
 

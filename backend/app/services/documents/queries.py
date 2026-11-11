@@ -101,7 +101,8 @@ async def get_text(
         raise NotFoundError("ไม่พบไฟล์ของเอกสารนี้")
     if version.processing_status != ProcessingStatus.READY.value:
         raise ConflictError("ยังไม่มีข้อความของเวอร์ชันนี้ (ยังประมวลผลไม่เสร็จหรือประมวลผลไม่สำเร็จ)")
-    content = await document_repo.get_text(session, version.id) or ""
+    # PDF page breaks are stored as form feeds; show them as blank lines.
+    content = (await document_repo.get_text(session, version.id) or "").replace("\f", "\n\n")
     return DocumentText(
         version_id=version.id,
         version_number=version.version_number,

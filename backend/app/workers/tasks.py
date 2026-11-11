@@ -39,7 +39,11 @@ def extract_document_text(version_id: str, force: bool = False) -> str:
     vid = uuid.UUID(version_id)
     try:
         with sync_session_scope() as session:
-            return process_version(session, get_storage(), vid, force=force)
+            status = process_version(session, get_storage(), vid, force=force)
+        if status == "READY":
+            # Index right away; a failure here never undoes the extracted text.
+            _index(vid, force=True)
+        return status
     except SoftTimeLimitExceeded:
         message = TIMEOUT_FAILURE
     except Exception:
@@ -48,3 +52,28 @@ def extract_document_text(version_id: str, force: bool = False) -> str:
     with sync_session_scope() as session:
         mark_failed(session, vid, message)
     return "FAILED"
+
+
+def _index(version_id: uuid.UUID, *, force: bool) -> str:
+    from app.core.config import get_settings
+    from app.services.ai.embeddings import build_embedding_provider
+    from app.services.documents.indexing import index_version
+
+    settings = get_settings()
+    try:
+        with sync_session_scope() as session:
+            return index_version(
+                session, settings, build_embedding_provider(settings), version_id, force=force
+            )
+    except Exception:
+        logger.exception("document_indexing_error", version_id=str(version_id))
+        return "FAILED"
+
+
+@celery_app.task(
+    name="documents.index_version",
+    soft_time_limit=EXTRACT_SOFT_LIMIT_SECONDS,
+    time_limit=EXTRACT_SOFT_LIMIT_SECONDS + 30,
+)
+def index_document_version(version_id: str, force: bool = False) -> str:
+    return _index(uuid.UUID(version_id), force=force)

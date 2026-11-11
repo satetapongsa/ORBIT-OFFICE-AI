@@ -65,7 +65,8 @@ def _pdf(stream: BinaryIO) -> tuple[str, int]:
             size += len(chunk)
             if size > MAX_TEXT_CHARS:
                 break
-        return "\n\n".join(parts), pages
+        # Form feeds mark page boundaries (page numbers in citations, Phase 7).
+        return "\f".join(parts), pages
     except ExtractionError:
         raise
     except (PdfReadError, ValueError, KeyError, TypeError, OSError):
