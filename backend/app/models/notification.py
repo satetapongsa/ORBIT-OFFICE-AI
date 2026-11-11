@@ -20,6 +20,7 @@ class NotificationType(StrEnum):
     ACCOUNT = "ACCOUNT"  # account created/updated, roles changed
     SYSTEM = "SYSTEM"  # announcements from the system itself
     DOCUMENT = "DOCUMENT"  # shared with you, processing failed
+    TASK = "TASK"  # assigned to you, status changed, new comment
 
 
 class Notification(UUIDPrimaryKeyMixin, Base):

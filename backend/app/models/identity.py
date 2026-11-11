@@ -146,6 +146,12 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("uq_users_employee_code", "employee_code", unique=True),
         Index("ix_users_department_id", "department_id"),
+        Index(
+            "ix_users_display_name_trgm",
+            "display_name",
+            postgresql_using="gin",
+            postgresql_ops={"display_name": "gin_trgm_ops"},
+        ),
         CheckConstraint(_in_check("employment_status", EmploymentStatus), name="employment_status"),
     )
 

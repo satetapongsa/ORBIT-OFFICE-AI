@@ -16,6 +16,7 @@ from app.models.document import (
     PrincipalType,
     ProcessingStatus,
 )
+from app.models.employee import EmployeeHrProfile, EmploymentType
 from app.models.identity import (
     Department,
     EmploymentStatus,
@@ -26,6 +27,16 @@ from app.models.identity import (
     role_permissions,
 )
 from app.models.notification import Notification, NotificationType
+from app.models.task import (
+    Task,
+    TaskAssignee,
+    TaskAttachment,
+    TaskComment,
+    TaskEvent,
+    TaskEventType,
+    TaskPriority,
+    TaskStatus,
+)
 
 __all__ = [
     "AccessLevel",
@@ -39,7 +50,9 @@ __all__ = [
     "DocumentVersion",
     "DocumentVersionText",
     "DocumentVisibility",
+    "EmployeeHrProfile",
     "EmploymentStatus",
+    "EmploymentType",
     "FileType",
     "Notification",
     "NotificationType",
@@ -49,6 +62,14 @@ __all__ = [
     "ProcessingStatus",
     "Role",
     "SoftDeleteMixin",
+    "Task",
+    "TaskAssignee",
+    "TaskAttachment",
+    "TaskComment",
+    "TaskEvent",
+    "TaskEventType",
+    "TaskPriority",
+    "TaskStatus",
     "TimestampMixin",
     "UUIDPrimaryKeyMixin",
     "User",
