@@ -70,23 +70,76 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-/**
- * Typed fetch wrapper for the AURA backend.
- * - Sends cookies (same-origin) for authentication.
- * - Parses the standard error envelope into `ApiError`.
- * - Validates successful responses with the given Zod schema.
- */
-export async function apiRequest<TSchema extends z.ZodType>(
+export const CSRF_COOKIE = "aura_csrf";
+export const CSRF_HEADER = "X-CSRF-Token";
+const SAFE_METHODS = new Set<HttpMethod>(["GET"]);
+/** Auth endpoints never trigger the automatic refresh-and-retry. */
+const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/auth/password-reset"];
+
+export function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = `${name}=`;
+  for (const part of document.cookie.split(";")) {
+    const trimmed = part.trim();
+    if (trimmed.startsWith(prefix)) return decodeURIComponent(trimmed.slice(prefix.length));
+  }
+  return null;
+}
+
+type SessionListener = () => void;
+const sessionExpiredListeners = new Set<SessionListener>();
+
+/** Notified when the session can no longer be refreshed (the user must sign in again). */
+export function onSessionExpired(listener: SessionListener): () => void {
+  sessionExpiredListeners.add(listener);
+  return () => sessionExpiredListeners.delete(listener);
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Rotate the refresh token once, even if many requests hit 401 at the same time. */
+function refreshSession(): Promise<boolean> {
+  // No CSRF cookie means there was never a session in this browser: nothing to refresh.
+  if (!readCookie(CSRF_COOKIE)) return Promise.resolve(false);
+  refreshInFlight ??= (async () => {
+    try {
+      const response = await fetch(`${API_BASE_PATH}/auth/refresh`, {
+        method: "POST",
+        headers: { Accept: "application/json", [CSRF_HEADER]: readCookie(CSRF_COOKIE) ?? "" },
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      if (response.ok) return true;
+      // Another tab rotated the session a moment ago; its new cookies are already ours.
+      const payload = await readJson(response);
+      const envelope = errorResponseSchema.safeParse(payload);
+      return envelope.success && envelope.data.error.code === "session_refresh_conflict";
+    } catch {
+      return false;
+    } finally {
+      setTimeout(() => {
+        refreshInFlight = null;
+      }, 0);
+    }
+  })();
+  return refreshInFlight;
+}
+
+async function send(
   path: string,
-  options: ApiRequestOptions<TSchema>,
-): Promise<z.infer<TSchema>> {
-  const { method = "GET", schema, body, query, signal, acceptStatuses = [] } = options;
+  method: HttpMethod,
+  body: unknown,
+  query: ApiRequestOptions<z.ZodType>["query"],
+  signal: AbortSignal | undefined,
+): Promise<Response> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-
-  let response: Response;
+  if (!SAFE_METHODS.has(method)) {
+    const csrf = readCookie(CSRF_COOKIE);
+    if (csrf) headers[CSRF_HEADER] = csrf;
+  }
   try {
-    response = await fetch(buildUrl(path, query), {
+    return await fetch(buildUrl(path, query), {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -97,6 +150,30 @@ export async function apiRequest<TSchema extends z.ZodType>(
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError({ status: 0, code: "network_error", message: NETWORK_ERROR_MESSAGE });
+  }
+}
+
+/**
+ * Typed fetch wrapper for the AURA backend.
+ * - Sends cookies (same-origin) and the CSRF header on state-changing requests.
+ * - On 401, refreshes the session once and retries; notifies listeners if that fails.
+ * - Parses the standard error envelope into `ApiError`.
+ * - Validates successful responses with the given Zod schema.
+ */
+export async function apiRequest<TSchema extends z.ZodType>(
+  path: string,
+  options: ApiRequestOptions<TSchema>,
+): Promise<z.infer<TSchema>> {
+  const { method = "GET", schema, body, query, signal, acceptStatuses = [] } = options;
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  let response = await send(normalizedPath, method, body, query, signal);
+  const mayRefresh = !NO_REFRESH_PATHS.some((p) => normalizedPath.startsWith(p));
+  if (response.status === 401 && mayRefresh) {
+    if (await refreshSession()) {
+      response = await send(normalizedPath, method, body, query, signal);
+    }
+    if (response.status === 401) sessionExpiredListeners.forEach((listener) => listener());
   }
 
   const requestId = response.headers.get("X-Request-ID");
