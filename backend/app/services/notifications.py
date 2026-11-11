@@ -8,15 +8,19 @@ see their own notifications.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.core.errors import NotFoundError
+from app.core.logging import get_logger
 from app.core.security import utcnow
-from app.models.notification import Notification, NotificationType
+from app.models.notification import EMAIL_DEFAULTS, Notification, NotificationType
 from app.repositories import notifications as notification_repo
+
+logger = get_logger(__name__)
 
 ACCOUNT_LINK = "/account"
 
@@ -55,6 +59,7 @@ def notify(
 ) -> Notification:
     """Add a notification to the caller's transaction (committed together with the change)."""
     entry = Notification(
+        id=uuid.uuid4(),
         user_id=user_id,
         type=type.value,
         title=title[:200],
@@ -64,7 +69,81 @@ def notify(
         entity_id=entity_id,
     )
     session.add(entry)
+    _queue_email(session, entry.id)
     return entry
+
+
+# --- E-mail after commit ---------------------------------------------------------------
+
+EmailDispatcher = Callable[[list[uuid.UUID]], None]
+
+
+def _celery_dispatch(ids: list[uuid.UUID]) -> None:
+    from app.core.config import get_settings
+    from app.core.mail import mail_enabled
+
+    if not ids or not mail_enabled(get_settings()):
+        return
+    from app.workers.celery_app import celery_app
+
+    try:
+        celery_app.send_task(
+            "notifications.send_emails", args=[[str(i) for i in ids]], queue="default"
+        )
+    except Exception:
+        logger.warning("notification_email_enqueue_failed", count=len(ids), exc_info=True)
+
+
+_dispatcher: EmailDispatcher = _celery_dispatch
+
+
+def set_email_dispatcher(dispatcher: EmailDispatcher | None) -> None:
+    """Replace how committed notification ids are handed to e-mail delivery (tests)."""
+    global _dispatcher
+    _dispatcher = dispatcher or _celery_dispatch
+
+
+def _after_commit(sync_session: Session) -> None:
+    ids = sync_session.info.pop(_PENDING_KEY, [])
+    if ids:
+        _dispatcher(list(ids))
+
+
+def _after_rollback(sync_session: Session) -> None:
+    sync_session.info.pop(_PENDING_KEY, None)
+
+
+_PENDING_KEY = "aura_email_notification_ids"
+_HOOKED_KEY = "aura_email_hooked"
+
+
+def _queue_email(session: AsyncSession | Session, notification_id: uuid.UUID) -> None:
+    """E-mails are considered only once the notification is committed (never on rollback)."""
+    sync = session.sync_session if isinstance(session, AsyncSession) else session
+    sync.info.setdefault(_PENDING_KEY, []).append(notification_id)
+    if not sync.info.get(_HOOKED_KEY):
+        event.listen(sync, "after_commit", _after_commit)
+        event.listen(sync, "after_rollback", _after_rollback)
+        sync.info[_HOOKED_KEY] = True
+
+
+# --- Preferences ------------------------------------------------------------------------
+
+
+async def get_email_preferences(
+    session: AsyncSession, user_id: uuid.UUID
+) -> dict[NotificationType, bool]:
+    chosen = await notification_repo.email_preferences(session, user_id)
+    return {t: chosen.get(t.value, EMAIL_DEFAULTS[t]) for t in NotificationType}
+
+
+async def set_email_preferences(
+    session: AsyncSession, user_id: uuid.UUID, choices: dict[NotificationType, bool]
+) -> dict[NotificationType, bool]:
+    for kind, enabled in choices.items():
+        await notification_repo.upsert_email_preference(session, user_id, kind.value, enabled)
+    await session.commit()
+    return await get_email_preferences(session, user_id)
 
 
 # --- Producers used by the identity services -------------------------------------------

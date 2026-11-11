@@ -7,9 +7,10 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationPreference
 
 
 async def list_for_user(
@@ -57,3 +58,26 @@ async def mark_all_read(session: AsyncSession, user_id: uuid.UUID, now: datetime
         .returning(Notification.id)
     )
     return len(result.all())
+
+
+async def email_preferences(session: AsyncSession, user_id: uuid.UUID) -> dict[str, bool]:
+    rows = await session.execute(
+        select(NotificationPreference.type, NotificationPreference.email_enabled).where(
+            NotificationPreference.user_id == user_id
+        )
+    )
+    return {r[0]: r[1] for r in rows}
+
+
+async def upsert_email_preference(
+    session: AsyncSession, user_id: uuid.UUID, kind: str, enabled: bool
+) -> None:
+    stmt = (
+        pg_insert(NotificationPreference)
+        .values(user_id=user_id, type=kind, email_enabled=enabled)
+        .on_conflict_do_update(
+            index_elements=["user_id", "type"],
+            set_={"email_enabled": enabled, "updated_at": func.now()},
+        )
+    )
+    await session.execute(stmt)

@@ -39,3 +39,21 @@ class UnreadCount(BaseModel):
 class MarkAllReadResult(BaseModel):
     updated: int = Field(ge=0)
     unread_count: int = Field(ge=0)
+
+
+class EmailPreference(BaseModel):
+    type: NotificationType
+    email_enabled: bool
+
+
+class EmailPreferenceOut(EmailPreference):
+    default: bool
+
+
+class EmailPreferences(BaseModel):
+    email_available: bool = Field(description="False while no mail server is configured.")
+    items: list[EmailPreferenceOut]
+
+
+class EmailPreferencesUpdate(BaseModel):
+    items: list[EmailPreference] = Field(max_length=20)

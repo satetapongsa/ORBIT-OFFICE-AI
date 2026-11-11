@@ -70,6 +70,15 @@ def _index(version_id: uuid.UUID, *, force: bool) -> str:
         return "FAILED"
 
 
+@celery_app.task(name="notifications.send_emails", soft_time_limit=120, time_limit=150)
+def send_notification_emails(ids: list[str]) -> dict[str, int]:
+    from app.core.config import get_settings
+    from app.services.notification_email import send_notification_emails as deliver
+
+    with sync_session_scope() as session:
+        return deliver(session, get_settings(), [uuid.UUID(i) for i in ids])
+
+
 @celery_app.task(
     name="documents.index_version",
     soft_time_limit=EXTRACT_SOFT_LIMIT_SECONDS,
