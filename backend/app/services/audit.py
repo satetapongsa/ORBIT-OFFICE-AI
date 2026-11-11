@@ -55,6 +55,11 @@ class AuditAction(StrEnum):
     EMPLOYEE_HR_PROFILE_UPDATED = "employee.hr_profile_updated"
     AI_ACTION_CONFIRMED = "ai.action_confirmed"
     AI_ACTION_REJECTED = "ai.action_rejected"
+    TICKET_CREATED = "ticket.created"
+    TICKET_STATUS_CHANGED = "ticket.status_changed"
+    TICKET_ASSIGNED = "ticket.assigned"
+    TICKET_UPDATED = "ticket.updated"
+    REPORT_EXPORTED = "report.exported"
 
 
 def record(
