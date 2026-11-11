@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { apiRequest } from "@/services/api-client";
 import { refSchema } from "@/services/auth";
+import { taskPrioritySchema, taskStatusSchema } from "@/services/tasks";
 import { notificationSchema } from "@/services/notifications";
 
 /** Mirrors backend `app/schemas/dashboard.py`. Optional sections are `null` without permission. */
@@ -55,6 +56,25 @@ export const dashboardSummarySchema = z.object({
       ),
     })
     .nullable(),
+  // Added in Phase 5; optional so an older backend response still validates.
+  tasks: z
+    .object({
+      open_assigned: z.number().int().nonnegative(),
+      overdue: z.number().int().nonnegative(),
+      due_soon: z.number().int().nonnegative(),
+      upcoming: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          status: taskStatusSchema,
+          priority: taskPrioritySchema,
+          due_at: z.string().nullable(),
+          is_overdue: z.boolean(),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
   organization: z
     .object({
       active_users: z.number().int().nonnegative(),

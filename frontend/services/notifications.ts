@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiRequest } from "@/services/api-client";
 
 /** Mirrors backend `app/schemas/notifications.py`. */
-export const notificationTypeSchema = z.enum(["SECURITY", "ACCOUNT", "SYSTEM", "DOCUMENT"]);
+export const notificationTypeSchema = z.enum(["SECURITY", "ACCOUNT", "SYSTEM", "DOCUMENT", "TASK"]);
 
 export const notificationSchema = z.object({
   id: z.string(),
