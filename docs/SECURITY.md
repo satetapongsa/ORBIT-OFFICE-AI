@@ -193,6 +193,20 @@ descriptions are plain text in the UI (never HTML).
 - Provider errors are mapped to `ai_provider_error` without leaking provider
   response bodies or keys.
 
+### Implemented in Phase 7 (RAG)
+- Retrieval (`app/repositories/rag.py`) joins `documents` with `accessible_documents_condition`
+  in the same SQL statement that ranks passages, and reads only chunks of each document's
+  current, processed version. Nothing is fetched and filtered afterwards; a passage from a
+  document the user cannot read never leaves the database. ACL changes, deletions and new
+  versions apply immediately (no re-index needed) — tested in `tests/api/test_rag.py`.
+- The assistant's `search_documents` / `read_document` tools and `GET /documents/search` use
+  that same path. Passages are sent to the model as JSON data fields with explicit
+  "data, not instructions" rules; the system prompt requires answers from sources only, with
+  `[n]` citations, and an explicit "no evidence found" when nothing matches.
+- Passages and snippets are rendered as plain text in the UI.
+- The embedding provider receives document text for indexing — choose a provider whose data
+  handling is acceptable (a local Ollama keeps text on your servers).
+
 ### Implemented in Phase 6
 - Chats, messages and actions are owner-only (`404` for anyone else, administrators
   included). `ai:chat` is required for every `/ai` endpoint; tools are offered only with

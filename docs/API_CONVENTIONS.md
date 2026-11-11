@@ -120,8 +120,9 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `GET /audit-logs` | `audit:read` | filters `action`, `actor_id`, `entity_type`, `entity_id`, `occurred_from`, `occurred_to` |
 | `GET /dashboard/summary` | signed in | personal sections always; `documents` needs `documents:read` (ACL-counted), `tasks` needs `tasks:read_own` (my open assigned tasks: counts + 5 earliest due), `organization` needs `users:read`, `security` needs `audit:read` — otherwise `null`. Days are grouped in `APP_TIMEZONE` (Phase 3) |
 | `GET /documents` | VIEW (ACL predicate) | `q` (title/description, wildcards escaped), `category`, `visibility`, `status`, `processing_status`, `department_id`, `mine`, `sort` = `updated`/`created`/`title`, `page`, `page_size` |
+| `GET /documents/search` | `documents:read` (ACL in SQL) | `q` (1–500), `limit` ≤ 50 (default 10); best passage per document: `{query, mode: hybrid|keyword, degraded, results[{document_id, title, category, version_number, page, snippet, score}]}` — only current versions of documents the caller may read (Phase 7) |
 | `POST /documents` | `documents:upload` | multipart: `file` + `title`, `description`, `category`, `visibility`, `department_id` (own department unless `documents:manage`); `201` detail; `413` too large, `415` unsupported/mismatched type, `422` empty/unsafe file, `503` storage down |
-| `GET /documents/{id}` | VIEW | detail + `access_level`, `capabilities`, `versions`; `404` for unknown **and** inaccessible |
+| `GET /documents/{id}` | VIEW | detail + `access_level`, `capabilities`, `versions` (each with `index_status` PENDING/INDEXING/READY/FAILED/SKIPPED, `index_error`, `chunk_count`, `indexed_at`); `404` for unknown **and** inaccessible |
 | `PATCH /documents/{id}` | EDIT (visibility/department: MANAGE) | title, description, category, status (`ARCHIVED` = owner's "remove") |
 | `DELETE /documents/{id}` | MANAGE + `documents:delete` | soft delete; `204` |
 | `POST /documents/{id}/versions` | EDIT + `documents:upload` | multipart `file`; becomes current |
@@ -149,7 +150,7 @@ rotated the session a moment ago; retry), `invalid_reset_token` (400).
 | `GET /ai/status` | `ai:chat` | `{enabled, provider, model, tools[{name, label, requires_confirmation}], max_message_chars}` — tools are those the caller may use (`ai:use_tools` + each tool's permission) |
 | `GET /ai/sessions`, `POST /ai/sessions` | `ai:chat` (own only) | newest first; `page`, `page_size` ≤ 100 |
 | `GET`/`PATCH`/`DELETE /ai/sessions/{id}` | `ai:chat` (own only) | detail = messages (tool messages carry a Thai label and `tool_ok`, never raw tool data) + actions; delete is soft; others' sessions `404` |
-| `POST /ai/sessions/{id}/messages` | `ai:chat` (+ `ai:use_tools` for tools) | body `{content}` (1–4000 chars); answer is `text/event-stream` with events `start`, `delta`, `tool`, `action`, `done`, `error`; `503 ai_not_configured` without a provider; `429` above `AI_CHAT_RATE_LIMIT_MESSAGES` per window |
+| `POST /ai/sessions/{id}/messages` | `ai:chat` (+ `ai:use_tools` for tools) | body `{content}` (1–4000 chars); answer is `text/event-stream` with events `start`, `delta`, `tool`, `action`, `done` (with `citations` [{n, document_id, version_id, chunk_id, title, page}]), `error`; stored assistant messages return `citations` [{n, document_id, title, page}]; `503 ai_not_configured` without a provider; `429` above `AI_CHAT_RATE_LIMIT_MESSAGES` per window |
 | `POST /ai/actions/{id}/confirm` | `ai:chat` + `ai:use_tools` + the tool's permission (own only) | re-validates and runs the proposed change as the user; `EXECUTED` / `FAILED`; `409` if already decided or expired |
 | `POST /ai/actions/{id}/reject` | `ai:chat` (own only) | `REJECTED`; nothing changes |
 | `GET /notifications` | signed in (own only) | `page`, `page_size` (≤100, default 20), `unread_only`; response adds `unread_count` |

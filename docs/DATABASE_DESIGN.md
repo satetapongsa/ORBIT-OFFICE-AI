@@ -158,7 +158,11 @@ Phase 7 chunks this text into `document_chunks`.
 Unique `(document_id, principal_type, principal_id)`; index
 `(principal_type, principal_id)` for retrieval-time filtering.
 
-### `document_chunks` (Phase 7)
+### `document_versions` index columns (Phase 7, migration `0007`)
+`index_status` (`PENDING`, `INDEXING`, `READY`, `FAILED`, `SKIPPED`, CHECK, default `PENDING`),
+`index_error`, `indexed_at`, `chunk_count`.
+
+### `document_chunks` (Phase 7, implemented — migration `0007`)
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
@@ -167,12 +171,14 @@ Unique `(document_id, principal_type, principal_id)`; index
 | chunk_index | int | unique with version |
 | page_number | int NULL | |
 | content | text | cleaned chunk text |
-| token_count | int | |
-| embedding | `vector(AI_EMBEDDING_DIMENSIONS)` | dimension fixed by migration (default 1024) |
-| embedding_model | varchar(200) | model that produced the vector |
-| metadata | jsonb | heading, sheet name, etc. |
+| char_count | int | characters (Thai has no reliable token count) |
+| embedding | `vector(1024)` NULL | fixed by migration `0007` (ADR-042); NULL when no embedding provider |
+| embedding_model | varchar(200) NULL | model that produced the vector; queries only use the configured model |
+| metadata | jsonb | reserved (heading, sheet name, …) |
 
-Index: HNSW `embedding vector_cosine_ops`; btree on `document_id`.
+Indexes: HNSW `embedding vector_cosine_ops` (queried with `hnsw.iterative_scan = relaxed_order`
+so the ACL filter does not starve results), GIN trigram on `content` (keyword search, works for
+Thai), btree on `document_id`, unique `(document_version_id, chunk_index)`.
 **ACL is not copied into chunks** — retrieval joins `documents` + `document_acl`
 at query time so permission changes take effect immediately (see `DECISIONS.md`).
 Only chunks of each document's `current_version_id` with `READY` status are
@@ -202,7 +208,8 @@ single predicate `app/repositories/task_access.visible_tasks_condition` (ADR-033
 | `ai_action_requests` | id, session_id FK CASCADE, user_id FK CASCADE, tool_name, tool_call_id, arguments JSONB (validated), summary (Thai), status (`PENDING`,`REJECTED`,`EXECUTED`,`FAILED`,`EXPIRED`, CHECK), result JSONB NULL, error NULL, expires_at, decided_at, executed_at, created_at |
 
 `system` messages are application notes appended when the user confirms or rejects an action
-(the history is append-only). Citations arrive with RAG in Phase 7.
+(the history is append-only). `chat_messages.citations` (JSONB, migration `0007`) lists the
+sources an answer cites: `[{n, document_id, version_id, chunk_id, title, page}]`.
 Retention: `AI_CHAT_RETENTION_DAYS` is configured but the purge job is Phase 9.
 
 ## 6. Helpdesk (Phase 8)
