@@ -21,6 +21,7 @@ from app.core.notifications import LogPasswordResetNotifier
 from app.core.rate_limit import RedisRateLimiter
 from app.core.redis import close_redis, get_redis
 from app.core.storage import ObjectStorage, get_storage
+from app.services.ai.providers import build_chat_provider
 from app.services.documents.service import CeleryDocumentProcessor
 
 logger = get_logger(__name__)
@@ -76,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.reset_notifier = LogPasswordResetNotifier(settings)
     app.state.document_storage = ObjectStorage(settings)
     app.state.document_processor = CeleryDocumentProcessor()
+    app.state.chat_provider = build_chat_provider(settings)
 
     register_exception_handlers(app)
 

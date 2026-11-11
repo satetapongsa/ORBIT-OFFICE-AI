@@ -27,6 +27,7 @@ from app.core.security import (
 )
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
+from app.services.ai.providers.base import ChatProvider
 from app.services.documents.service import DocumentProcessor, DocumentStorage
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -70,6 +71,11 @@ def get_document_storage(request: Request) -> DocumentStorage:
 def get_document_processor(request: Request) -> DocumentProcessor:
     processor: DocumentProcessor = request.app.state.document_processor
     return processor
+
+
+def get_chat_provider(request: Request) -> ChatProvider | None:
+    provider: ChatProvider | None = request.app.state.chat_provider
+    return provider
 
 
 def get_request_meta(request: Request) -> RequestMeta:

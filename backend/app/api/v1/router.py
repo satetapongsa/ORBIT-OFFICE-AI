@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    ai,
     audit,
     auth,
     dashboard,
@@ -30,3 +31,4 @@ api_router.include_router(documents.router)
 api_router.include_router(directory.router)
 api_router.include_router(tasks.router)
 api_router.include_router(employees.router)
+api_router.include_router(ai.router)
