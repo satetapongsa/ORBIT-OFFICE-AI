@@ -82,11 +82,43 @@ Standard codes: `bad_request`, `unauthenticated`, `permission_denied`,
 | `X-CSRF-Token`   | request   | required on `POST/PUT/PATCH/DELETE` with cookie auth (Phase 2) |
 | `Retry-After`    | response  | with `429` / `503`                                  |
 
-## Authentication (Phase 2)
+## Authentication (implemented in Phase 2)
 
 Browser clients authenticate with HttpOnly cookies set by `POST /api/v1/auth/login`
-(`aura_access`, `aura_refresh`) and a readable `aura_csrf` cookie for the
-double-submit CSRF check. Details in `SECURITY.md`.
+(`aura_access`, `aura_refresh`) plus a readable `aura_csrf` cookie whose value must be
+echoed in `X-CSRF-Token` on every cookie-authenticated `POST/PUT/PATCH/DELETE`
+(including refresh and logout). API clients may send `Authorization: Bearer <access token>`
+instead (no CSRF needed). Details in `SECURITY.md`.
+
+Extra error codes: `csrf_failed` (403), `session_refresh_conflict` (401 — another tab
+rotated the session a moment ago; retry), `invalid_reset_token` (400).
+
+## Endpoint index (v1)
+
+| Method & path | Permission | Notes |
+| --- | --- | --- |
+| `POST /auth/login` | — | sets session cookies; returns `{user, permissions, session}`; rate limited |
+| `POST /auth/refresh` | refresh cookie + CSRF | rotates tokens; `401` if there is no session |
+| `POST /auth/logout` | CSRF (when cookies are present) | revokes the session family; `204` |
+| `GET /auth/me` | signed in | current user and permission codes |
+| `POST /auth/change-password` | signed in | revokes other sessions |
+| `POST /auth/password-reset/request` | — | always `202` with the same message |
+| `POST /auth/password-reset/confirm` | — | single-use token |
+| `GET /users` | `users:read` | `page`, `page_size`, `q`, `department_id`, `is_active`, `role` |
+| `POST /users` | `users:create` (+ `roles:assign` for non-default roles) | `201` |
+| `GET /users/{id}` | `users:read` | |
+| `PATCH /users/{id}` | `users:update` | |
+| `POST /users/{id}/deactivate`, `POST /users/{id}/activate` | `users:deactivate` | deactivation revokes sessions |
+| `PUT /users/{id}/roles` | `roles:assign` | escalation and last-admin guards |
+| `GET /departments`, `GET /departments/{id}` | `departments:read` | includes `member_count` |
+| `POST /departments`, `PATCH`/`DELETE /departments/{id}` | `departments:manage` | delete is a soft delete; `409` while members remain |
+| `GET /permissions` | `roles:read` | catalogue with Thai descriptions |
+| `GET /roles`, `GET /roles/{id}` | `roles:read` | |
+| `POST /roles`, `PATCH /roles/{id}` | `roles:manage` | |
+| `PUT /roles/{id}/permissions` | `roles:manage` | cannot grant what you do not hold; `ADMIN` is locked |
+| `DELETE /roles/{id}` | `roles:manage` | custom, unassigned roles only |
+| `GET /audit-logs` | `audit:read` | filters `action`, `actor_id`, `entity_type`, `entity_id`, `occurred_from`, `occurred_to` |
+| `GET /health/live`, `GET /health` | — | see below |
 
 ## Health endpoints (Phase 1)
 

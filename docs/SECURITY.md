@@ -3,20 +3,23 @@
 Security is enforced in the **backend**. The frontend may hide actions the user
 cannot perform, but every API independently authenticates and authorises.
 
-## 1. Authentication (Phase 2)
+## 1. Authentication (implemented in Phase 2)
 
-| Item               | Design                                                                 |
+| Item               | Implementation                                                         |
 | ------------------ | ---------------------------------------------------------------------- |
-| Password hashing   | Argon2id (`argon2-cffi`), parameters from library defaults (≥ OWASP minimum), rehash on login when parameters change |
-| Access token       | JWT (HS256, secret `JWT_SECRET_KEY`), lifetime 15 min, claims `sub`, `sid`, `iat`, `exp`, `jti`, `type=access`. Permissions are **not** embedded — they are loaded per request so revocations apply immediately |
-| Refresh token      | 256-bit opaque random value, stored only as SHA-256 hash in `user_sessions`, lifetime 7 days (sliding up to an absolute 30-day cap) |
-| Rotation           | each refresh issues a new refresh token and marks the old one rotated; presenting a rotated token revokes the whole session family (theft detection) |
-| Cookie storage     | `aura_access` (path `/api`), `aura_refresh` (path `/api/v1/auth`), both `HttpOnly`, `Secure` (non-dev), `SameSite=Lax`. Nothing long-lived in `localStorage` |
-| CSRF               | double-submit: readable `aura_csrf` cookie + `X-CSRF-Token` header must match on every unsafe method; plus `SameSite=Lax` and same-origin deployment |
-| Logout             | revokes the session family, clears cookies, audit-logged              |
-| Session expiry     | access 15 min; refresh 7 days idle; password change / deactivation revokes all sessions |
-| Password reset     | single-use random token (hashed in DB, 30 min expiry), delivered by an email adapter (dev: logged to console only in `development`) |
-| Brute force        | per-account and per-IP login rate limits in Redis; generic error message (`อีเมลหรือรหัสผ่านไม่ถูกต้อง`) to avoid account enumeration |
+| Password hashing   | Argon2id (`argon2-cffi`, library defaults ≥ OWASP minimum); rehash on login when parameters change; a dummy hash is verified for unknown e-mails so timing does not reveal accounts |
+| Password policy    | ≥ `PASSWORD_MIN_LENGTH` (12) chars, ≤ 256, not a common/low-variety password, must not contain the e-mail local part (`app/services/passwords.py`) |
+| Access token       | JWT HS256 (`JWT_SECRET_KEY`), 15 min, claims `iss`, `sub`, `sid` (session family), `iat`, `exp`, `jti`, `type=access`. Permissions are **not** embedded — they are loaded per request, so revocation is immediate |
+| Per-request checks | token valid → user exists, active, not deleted → token issued after the last password change → session family not revoked/expired → permissions loaded fresh |
+| Refresh token      | 256-bit opaque value, stored only as SHA-256 in `user_sessions`; idle lifetime 7 days, absolute cap 30 days per login |
+| Rotation           | every refresh issues a new token and marks the old row rotated. A rotated token re-presented within `REFRESH_REUSE_GRACE_SECONDS` (10 s, parallel tabs) is rejected without revoking; later re-use revokes the whole family and is audit-logged (`auth.refresh_reuse_detected`) |
+| Cookies            | `aura_access` (path `/api`) and `aura_refresh` (path `/api/v1/auth`) are `HttpOnly`; `aura_csrf` (path `/`) is readable; all `SameSite=Lax`, `Secure` except in development/test (`COOKIE_SECURE` overrides). Nothing is stored in `localStorage` |
+| Bearer tokens      | `Authorization: Bearer <access token>` is accepted for API clients; such requests are not subject to CSRF (no ambient credentials) |
+| CSRF               | double-submit: `X-CSRF-Token` must equal the `aura_csrf` cookie on every cookie-authenticated `POST/PUT/PATCH/DELETE`, including refresh and logout. Login and password-reset endpoints carry no session and are exempt |
+| Logout             | revokes the session family (all rotations), clears cookies, audit-logged; the still-unexpired access token stops working immediately |
+| Password change    | requires the current password; revokes every other session and issues fresh tokens for the current one |
+| Password reset     | single-use token (SHA-256 in DB, 30 min), older tokens invalidated, all sessions revoked on success; the request endpoint always answers 202 with the same message (no enumeration). Delivery: no mail adapter yet — in `development` the link is logged, elsewhere it is **not** logged and a warning says delivery is not configured |
+| Brute force        | Redis fixed-window limits: 10 attempts / 15 min per e-mail and 50 per IP; 429 with `Retry-After`; generic error `อีเมลหรือรหัสผ่านไม่ถูกต้อง` for wrong password, unknown e-mail and inactive accounts. The limiter **fails open** if Redis is down (logged; readiness reports Redis) — reviewed in Phase 9 |
 
 ## 2. Authorisation (RBAC)
 
@@ -45,8 +48,24 @@ cannot perform, but every API independently authenticates and authorises.
 | System            | `system:configure`, `system:configure_ai`                                   |
 | Audit             | `audit:read`                                                                |
 
-Default role mapping is defined in the Phase 2 seed and documented in
-`DECISIONS.md` when implemented.
+### Default system roles (`app/core/permissions.py`, synced by `python -m app.cli sync-rbac`)
+
+| Role | Permissions |
+| --- | --- |
+| `EMPLOYEE` | `departments:read`, `documents:read`, `documents:upload`, `tasks:read_own`, `tasks:create`, `employees:read_directory`, `tickets:create`, `tickets:read_own`, `analytics:read_own`, `ai:chat`, `ai:use_tools` |
+| `MANAGER` | EMPLOYEE + `users:read`, `tasks:read_department`, `tasks:assign`, `tasks:manage_department`, `analytics:read_department`, `reports:export` |
+| `HR` | EMPLOYEE + `users:read`, `users:create`, `users:update`, `departments:manage`, `employees:read_sensitive`, `employees:manage` |
+| `IT_SUPPORT` | EMPLOYEE + `users:read`, `tickets:read_all`, `tickets:assign`, `tickets:manage`, `tickets:comment_internal` |
+| `ADMIN` | every permission; its permission set is locked (cannot be edited through the API) |
+
+### Privilege-escalation guards (`app/services/rbac.py`, `app/services/users.py`)
+
+- Nobody can grant **or revoke** a permission they do not hold: creating/editing a role and
+  assigning/removing a role to/from a user both require the actor to hold every affected permission.
+- Creating a user with any role other than the default `EMPLOYEE` requires `roles:assign`.
+- The last active `ADMIN` cannot be demoted or deactivated; users cannot deactivate themselves.
+- System roles cannot be deleted; custom roles cannot be deleted while assigned.
+- Deactivating a user revokes all of their sessions immediately.
 
 ## 3. Document ACL
 
@@ -63,7 +82,8 @@ document is not soft-deleted):
 This rule is implemented **once** as a SQLAlchemy predicate
 (`repositories/document_access.py`) and reused by: listing, preview, download,
 search, RAG retrieval, summarisation and report generation. Tests must cover
-each call site (Phase 4/7/9).
+each call site (Phase 4/7/9). Phase 2 tests (`tests/api/test_document_access.py`) cover every
+rule above against PostgreSQL, including VIEW vs EDIT levels and soft deletion.
 
 ## 4. File upload security (Phase 4)
 
@@ -116,11 +136,17 @@ each call site (Phase 4/7/9).
 
 ## 8. Audit logging
 
-Events (Phase 2 onward): login success/failure, logout, refresh-token reuse,
-user create/update/deactivate, role and permission changes, document upload /
-download / delete / ACL change, task updates, ticket status changes, AI action
-confirmations, system configuration changes. Stored in `audit_logs`
-(append-only) with actor, IP, user agent and request ID.
+Implemented actions (`app/services/audit.py`): `auth.login`, `auth.login_failed` (reason +
+hashed e-mail, never the password), `auth.login_rate_limited`, `auth.logout`,
+`auth.refresh_reuse_detected`, `auth.password_changed`, `auth.password_reset_requested`,
+`auth.password_reset_completed`, `user.created|updated|deactivated|activated|roles_changed`,
+`role.created|updated|deleted|permissions_changed`, `department.created|updated|deleted`.
+Entries are written in the same transaction as the change. A database trigger rejects
+`UPDATE`/`DELETE` on `audit_logs`. Read access requires `audit:read`.
+
+Planned events (later phases): document upload / download / delete / ACL change, task
+updates, ticket status changes, AI action confirmations, system configuration changes.
+Every entry stores actor, IP, user agent and request ID.
 
 ## 9. Reporting a vulnerability
 

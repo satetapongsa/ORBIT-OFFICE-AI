@@ -22,25 +22,31 @@ source of truth once written).
 Migration `0001` enables extensions: `vector`, `pg_trgm`. (`gen_random_uuid()`
 is built into PostgreSQL ≥ 13.)
 
+**Implemented so far:** `0001` (extensions) and `0002` (departments, users, roles,
+permissions, user_roles, role_permissions, user_sessions, password_reset_tokens,
+audit_logs, documents core, document_acl). Sections marked *implemented* match the
+migration; the rest is the plan.
+
 ## 2. Identity and access
 
-### `departments` (Phase 2)
+### `departments` (Phase 2, implemented)
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
-| code | varchar(32) | unique, e.g. `IT`, `HR`, `FIN` |
+| code | varchar(32) | unique among live rows (partial index `WHERE deleted_at IS NULL`), e.g. `IT`, `HR`, `FIN` |
 | name | varchar(200) | Thai display name |
 | parent_id | uuid FK → departments.id NULL | optional hierarchy |
-| manager_id | uuid FK → users.id NULL | `ON DELETE SET NULL` |
+| description | text NULL | |
+| manager_id | uuid FK → users.id NULL | `ON DELETE SET NULL`; added after `users` (circular FK) |
 | deleted_at | timestamptz NULL | |
 
-### `users` (Phase 2)
+### `users` (Phase 2, implemented)
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
 | employee_code | varchar(32) | unique — company employee ID |
-| email | citext-like `varchar(320)` | unique on `lower(email)` |
-| password_hash | varchar(255) | Argon2id; NULL for SSO-only users later |
+| email | `varchar(320)` | stored lower-case; unique index on `lower(email)` |
+| password_hash | varchar(255) NULL | Argon2id; NULL = no password yet (user sets one via the reset flow) |
 | first_name, last_name | varchar(100) | |
 | display_name | varchar(200) | |
 | department_id | uuid FK → departments.id NULL | `ON DELETE SET NULL` |
@@ -49,7 +55,7 @@ is built into PostgreSQL ≥ 13.)
 | employment_status | varchar(20) | `ACTIVE`, `ON_LEAVE`, `SUSPENDED`, `TERMINATED` |
 | is_active | boolean | login allowed |
 | last_login_at | timestamptz NULL | |
-| password_changed_at | timestamptz NULL | invalidates older sessions |
+| password_changed_at | timestamptz NULL | access tokens issued before it are rejected |
 | deleted_at | timestamptz NULL | |
 
 Index: `ix_users_department_id`, trigram index on display name (Phase 5).
@@ -60,34 +66,41 @@ sensitive columns: `user_id` (PK/FK), `date_of_birth`, `national_id_last4`,
 `personal_phone`, `personal_email`, `address`, `hire_date`, `employment_type`,
 `emergency_contact` (JSONB). Readable only with `employees:read_sensitive`.
 
-### `roles`, `permissions`, `user_roles`, `role_permissions` (Phase 2)
+### `roles`, `permissions`, `user_roles`, `role_permissions` (Phase 2, implemented)
 | table | columns |
 | --- | --- |
-| `roles` | id, code (unique, e.g. `ADMIN`), name, description, is_system (bool — system roles cannot be deleted) |
+| `roles` | id, code (unique; CHECK upper-case `A-Z0-9_`, 2–50 chars), name, description, is_system (system roles cannot be deleted) |
 | `permissions` | id, code (unique, `domain:action`, e.g. `documents:upload`), description |
 | `user_roles` | user_id FK, role_id FK, assigned_by FK users NULL, created_at — PK (user_id, role_id) |
 | `role_permissions` | role_id FK, permission_id FK — PK (role_id, permission_id) |
 
-Permissions are seeded by migration/seed script from a code-defined catalogue
-(`app/core/permissions.py`, Phase 2) so code and DB stay in sync.
+Permissions and system roles are synced from the code catalogue
+(`app/core/permissions.py`) by `python -m app.cli sync-rbac`, which the Compose
+`migrate` service runs after `alembic upgrade head` on every start (idempotent).
 
-### `user_sessions` (Phase 2) — refresh-token rotation
+### `user_sessions` (Phase 2, implemented) — refresh-token rotation
 | column | type | notes |
 | --- | --- | --- |
-| id | uuid PK | session id (also in access-token `sid` claim) |
+| id | uuid PK | one row per issued refresh token |
 | user_id | uuid FK → users ON DELETE CASCADE | |
-| family_id | uuid | all rotations of one login share a family |
-| refresh_token_hash | char(64) | SHA-256 of the opaque refresh token; unique |
-| expires_at | timestamptz | |
+| family_id | uuid | all rotations of one login share a family; the access-token `sid` claim |
+| refresh_token_hash | varchar(64) | SHA-256 of the opaque refresh token; unique |
+| expires_at | timestamptz | idle expiry of this token |
+| family_expires_at | timestamptz | absolute cap for the whole login |
+| revoked_reason | varchar(50) NULL | `logout`, `refresh_reuse`, `password_changed`, `deactivated`, … |
 | rotated_at / revoked_at | timestamptz NULL | reuse of a rotated token revokes the whole family |
 | user_agent, ip_address | varchar / inet NULL | for the user's session list |
 
-### `password_reset_tokens` (Phase 2 architecture)
-id, user_id FK, token_hash (unique), expires_at, used_at NULL.
+### `password_reset_tokens` (Phase 2, implemented)
+id, user_id FK CASCADE, token_hash (SHA-256, unique), created_at, expires_at, used_at NULL.
 
 ## 3. Documents and RAG
 
-### `documents` (Phase 4)
+### `documents` (core implemented in Phase 2; completed in Phase 4)
+Phase 2 created id, title, description, owner_id (`ON DELETE RESTRICT`), department_id,
+visibility, status, timestamps and deleted_at so the access predicate could be built and
+tested. `category` and `current_version_id` arrive with the Phase 4 migration.
+
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
@@ -108,7 +121,7 @@ mime_type, size_bytes, sha256, uploaded_by FK, processing_status
 (`PENDING`, `PROCESSING`, `READY`, `FAILED`), processing_error (text NULL),
 page_count NULL, created_at.
 
-### `document_acl` (foundation Phase 2, used Phase 4)
+### `document_acl` (Phase 2, implemented; used from Phase 4)
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
@@ -179,7 +192,7 @@ expired sessions.
 id, user_id FK CASCADE, type, title, body, link_url NULL, entity_type/entity_id
 NULL, read_at NULL, created_at. Index `(user_id, read_at, created_at DESC)`.
 
-### `audit_logs` (Phase 2)
+### `audit_logs` (Phase 2, implemented)
 | column | type | notes |
 | --- | --- | --- |
 | id | uuid PK | |
@@ -192,7 +205,8 @@ NULL, read_at NULL, created_at. Index `(user_id, read_at, created_at DESC)`.
 | request_id | varchar(64) NULL | correlates with structured logs |
 | metadata | jsonb | **never** passwords, tokens, keys or document content |
 
-Append-only: the application has no update/delete path for audit rows.
+Append-only, enforced by the database: trigger `trg_audit_logs_append_only` raises on
+`UPDATE` and `DELETE`. Indexes: `occurred_at`, `actor_id`, `action`, `(entity_type, entity_id)`.
 
 ## 8. Entity relationship summary
 
