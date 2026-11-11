@@ -120,6 +120,21 @@ export function employeeSummary(): DashboardSummary {
         },
       ],
     },
+    tasks: {
+      open_assigned: 3,
+      overdue: 1,
+      due_soon: 1,
+      upcoming: [
+        {
+          id: "t-1",
+          title: "ส่งใบเสนอราคา",
+          status: "IN_PROGRESS",
+          priority: "HIGH",
+          due_at: "2026-11-10T16:59:00Z",
+          is_overdue: true,
+        },
+      ],
+    },
     organization: null,
     security: null,
   };

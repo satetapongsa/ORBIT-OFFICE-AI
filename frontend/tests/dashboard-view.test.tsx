@@ -43,6 +43,15 @@ describe("DashboardView", () => {
       "/documents/doc-1",
     );
 
+    // Tasks (Phase 5): my open work, overdue first.
+    const tasks = screen.getByTestId("tasks-card");
+    expect(tasks).toHaveTextContent("งานที่ยังไม่เสร็จ 3 งาน · เลยกำหนด 1 · ครบกำหนดใน 7 วัน 1");
+    expect(within(tasks).getByRole("link", { name: /ส่งใบเสนอราคา/ })).toHaveAttribute(
+      "href",
+      "/tasks/t-1",
+    );
+    expect(within(tasks).getByTestId("task-due")).toHaveTextContent("เลยกำหนด");
+
     const activity = within(screen.getByTestId("my-activity")).getAllByTestId("activity-item");
     expect(activity[0]).toHaveTextContent("เข้าสู่ระบบ");
     expect(activity[0]).not.toHaveTextContent("สมชาย"); // own actions are not attributed
