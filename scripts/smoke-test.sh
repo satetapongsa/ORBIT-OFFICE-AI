@@ -16,7 +16,7 @@ cat /tmp/aura-ready.json; echo
 [[ "$code" == "200" ]] || fail "readiness returned HTTP $code"
 
 echo "==> frontend page ($BASE)"
-curl -fsS "$BASE/" | grep -q "AURA OFFICE AI" || fail "frontend page"
+curl -fsSL "$BASE/" | grep -q "AURA OFFICE AI" || fail "frontend page"  # / redirects to /dashboard
 
 echo "==> frontend → backend proxy"
 curl -fsS "$BASE/api/v1/health/live" | grep -q '"status":"ok"' || fail "proxy"
