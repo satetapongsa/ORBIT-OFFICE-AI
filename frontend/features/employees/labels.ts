@@ -14,9 +14,16 @@ export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
   INTERN: "นักศึกษาฝึกงาน",
 };
 
-/** Initials for avatars: first letter of first and last name (Thai or Latin). */
+// Thai vowels written before the consonant they follow in speech (เ แ โ ใ ไ).
+const LEADING_VOWELS = /^[เ-ไ]+/;
+
+function initial(name: string): string {
+  return Array.from(name.trim().replace(LEADING_VOWELS, ""))[0] ?? "";
+}
+
+/** Avatar initials: first consonant/letter of first and last name ("ไอรดา เทคโน" → "อท"). */
 export function initials(first: string, last: string): string {
-  return `${Array.from(first.trim())[0] ?? ""}${Array.from(last.trim())[0] ?? ""}`.toUpperCase();
+  return `${initial(first)}${initial(last)}`.toUpperCase();
 }
 
 export function formatThaiDate(isoDate: string): string {

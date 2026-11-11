@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EmployeeProfileView } from "@/features/employees/components/employee-profile-view";
 import { EmployeesView } from "@/features/employees/components/employees-view";
+import { initials } from "@/features/employees/labels";
 import type { Employee, EmployeeProfile, HrProfile } from "@/services/employees";
 
 import { createWrapper, json, mockApi } from "./fixtures";
@@ -86,6 +87,14 @@ beforeEach(() => {
   permissions = new Set(["employees:read_directory", "departments:read"]);
   selfId = "u-viewer";
   document.cookie = "aura_csrf=csrf-token; path=/";
+});
+
+describe("initials", () => {
+  it("skips Thai leading vowels", () => {
+    expect(initials("ไอรดา", "เทคโน")).toBe("อท");
+    expect(initials("สมชาย", "ใจดี")).toBe("สจ");
+    expect(initials("john", "smith")).toBe("JS");
+  });
 });
 
 describe("EmployeesView", () => {
