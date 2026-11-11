@@ -187,3 +187,47 @@ added later (Next.js `proxy.ts`) if needed.
 **Context.** `email-validator` rejects special-use domains such as `.local` and `.test`.
 **Decision.** Development seed accounts use `@aura.example.com`, tests use `@example.com`
 (RFC 2606 documentation domains, accepted by the validator, never deliverable).
+
+## ADR-023 — Notification inbox ships in Phase 3 (2026-11-11)
+**Context.** The Phase 3 dashboard needs a notification preview from real data; the plan put
+notifications in Phase 8.
+**Decision.** Migration `0003` creates `notifications`; `app/services/notifications.py` adds
+entries in the same transaction as the event (welcome on account creation, password
+changed/reset, suspicious refresh-token reuse, roles changed, account updated by someone
+else, account re-activated). The API (`/notifications`) is owner-only — no permission code,
+every query filters by the caller, other users' rows answer `404`. `link_url` must be a
+relative in-app path (DB `CHECK` + service + client `safeRedirectPath`). Reading a
+notification is not audited (noise); the events that create them already are.
+**Consequences.** Phase 8 adds module notification types (a migration extends the `type`
+CHECK), preferences and e-mail delivery on top of this table.
+
+## ADR-024 — One permission-gated dashboard summary endpoint (2026-11-11)
+**Decision.** `GET /dashboard/summary` returns personal sections for every user and optional
+sections (`documents`, `organization`, `security`) only when the caller holds the permission
+guarding the same detail data (`documents:read` via `accessible_documents_condition`,
+`users:read`, `audit:read`); otherwise they are `null`. Activity items are reduced to
+action/time/actor/entity type. One request keeps the page fast and the rules in one service
+(`app/services/dashboard.py`).
+**Consequences.** Later phases add `tasks`/`tickets` sections the same way (permission →
+section). No caching yet; every aggregate is an indexed count.
+
+## ADR-025 — Business time zone for daily statistics (2026-11-11)
+**Decision.** `APP_TIMEZONE` (IANA, default `Asia/Bangkok`, validated at startup) defines the
+calendar day for dashboard series; PostgreSQL groups with `timezone(APP_TIMEZONE, occurred_at)`
+and Python fills missing days with zero. `tzdata` is a dependency so `zoneinfo` works on
+Windows and slim images. Timestamps stay UTC in the database and API.
+
+## ADR-026 — Charts without a chart library (2026-11-11)
+**Decision.** Dashboard charts are small HTML/CSS components (`components/charts/column-chart.tsx`):
+columns ≤ 24 px with 4 px rounded data ends, recessive gridlines at whole-number ticks, a
+hover/focus tooltip per column, a legend for ≥ 2 series, an accessible label per column and a
+"ดูเป็นตาราง" table view. Series colours (`--chart-1` blue `#2a78d6`, `--chart-2` orange
+`#eb6834`) passed a colour-vision-deficiency palette check (adjacent ΔE 24.7, protan).
+**Consequences.** No extra dependency and testable in jsdom; richer analytics (Phase 8) may
+revisit this.
+
+## ADR-027 — Dashboard is the home page (2026-11-11)
+**Decision.** `/` redirects (307, `next.config.ts`) to `/dashboard`; login falls back to
+`HOME_PATH`; system status moved to `/system-status`. Every page under `app/(app)` also exports
+`instant = false` (the layout-level flag alone did not silence Next.js instant-navigation
+validation for new page segments).
