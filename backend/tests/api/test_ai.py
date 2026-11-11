@@ -96,6 +96,8 @@ def test_status_lists_tools_by_permission(
         "search_documents": False,
         "read_document": False,
         "find_colleagues": False,
+        "get_my_tickets": False,
+        "create_ticket": True,
         "create_task": True,
         "update_task_status": True,
     }
@@ -261,6 +263,8 @@ def test_read_tool_returns_only_what_the_user_may_see(
         "search_documents",
         "read_document",
         "find_colleagues",
+        "get_my_tickets",
+        "create_ticket",
         "create_task",
         "update_task_status",
     ]
@@ -433,5 +437,85 @@ def test_assignee_cannot_propose_cancel(
         say("ไม่ได้"),
     ]
     stream = send(alice, session_id, "ยกเลิกงานนี้")
+    assert "action" not in names(stream)
+    assert provider.tool_results()[0]["ok"] is False
+
+
+# --- Helpdesk tools (Phase 8) ---------------------------------------------------------------
+
+
+def test_get_my_tickets_returns_only_my_tickets(
+    as_user: AsUser, provider: ScriptedProvider
+) -> None:
+    alice = as_user(["EMPLOYEE"])
+    bob = as_user(["EMPLOYEE"])
+    alice.post("/api/v1/tickets", json={"title": "จอกะพริบ", "description": "ตลอดเวลา"})
+    bob.post("/api/v1/tickets", json={"title": "ปัญหาลับของบ็อบ", "description": "x"})
+    session_id = new_session(alice)
+    provider.turns += [call("get_my_tickets", {}), say("คุณมี 1 รายการ")]
+    send(alice, session_id, "เรื่องที่ฉันแจ้งไว้เป็นยังไงบ้าง")
+    [result] = provider.tool_results()
+    assert result["ok"] is True
+    assert [t["title"] for t in result["data"]["tickets"]] == ["จอกะพริบ"]
+    assert result["data"]["tickets"][0]["status_label"] == "รอรับเรื่อง"
+    assert "ปัญหาลับของบ็อบ" not in str(provider.tool_results())
+
+
+def test_create_ticket_only_after_confirmation(
+    db: Factory, as_user: AsUser, provider: ScriptedProvider
+) -> None:
+    it = as_user(["IT_SUPPORT"])
+    alice = as_user(["EMPLOYEE"])
+    session_id = new_session(alice)
+    provider.turns += [
+        call(
+            "create_ticket",
+            {
+                "title": "เข้าอีเมลไม่ได้",
+                "description": "รหัสผ่านถูกต้องแต่เข้าไม่ได้",
+                "category": "ACCOUNT_ACCESS",
+                "priority": "HIGH",
+            },
+        ),
+        say("กรุณายืนยันการแจ้งปัญหา"),
+    ]
+    action = next(d for e, d in send(alice, session_id, "แจ้งไอทีว่าเข้าอีเมลไม่ได้") if e == "action")
+    assert action["summary"] == "แจ้งปัญหาไอที “เข้าอีเมลไม่ได้” · หมวดบัญชีและสิทธิ์เข้าใช้ · ความสำคัญสูง"
+    assert count(db, "SELECT count(*) FROM tickets") == 0
+
+    confirmed = alice.post(f"{BASE}/actions/{action['id']}/confirm").json()
+    assert confirmed["status"] == "EXECUTED"
+    ticket = alice.get(confirmed["result"]["link"].replace("/helpdesk", "/api/v1/tickets")).json()
+    assert ticket["title"] == "เข้าอีเมลไม่ได้"
+    assert ticket["requester"]["id"] == uid(alice)
+    assert ticket["category"] == "ACCOUNT_ACCESS"
+    # IT hears about it like any other ticket.
+    titles = [n["title"] for n in it.get("/api/v1/notifications").json()["items"]]
+    assert any("เข้าอีเมลไม่ได้" in t for t in titles)
+
+
+def test_ticket_tools_follow_permissions(
+    db: Factory, as_user: AsUser, provider: ScriptedProvider
+) -> None:
+    with db.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO roles (code, name, description, is_system)"
+                " VALUES ('NO_TICKETS', 'ไม่มีแจ้งปัญหา', '', false)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO role_permissions (role_id, permission_id) SELECT r.id, p.id"
+                " FROM roles r, permissions p WHERE r.code = 'NO_TICKETS'"
+                " AND p.code IN ('ai:chat', 'ai:use_tools', 'tasks:read_own')"
+            )
+        )
+    client = as_user(["NO_TICKETS"])
+    tools = {t["name"] for t in client.get(f"{BASE}/status").json()["tools"]}
+    assert "get_my_tickets" not in tools and "create_ticket" not in tools
+    session_id = new_session(client)
+    provider.turns += [call("create_ticket", {"title": "x", "description": "y"}), say("ไม่ได้")]
+    stream = send(client, session_id, "แจ้งปัญหา")
     assert "action" not in names(stream)
     assert provider.tool_results()[0]["ok"] is False

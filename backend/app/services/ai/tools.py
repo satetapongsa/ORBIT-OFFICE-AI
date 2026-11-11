@@ -30,9 +30,13 @@ from app.core.permissions import P
 from app.core.principal import CurrentUser, RequestMeta
 from app.core.security import utcnow
 from app.models.task import TaskPriority, TaskStatus
+from app.models.ticket import TicketCategory, TicketStatus
 from app.repositories import tasks as task_repo
+from app.repositories import tickets as ticket_repo
 from app.repositories.tasks import TaskFilters
+from app.repositories.tickets import TicketFilters
 from app.schemas.tasks import TaskCreate
+from app.schemas.tickets import TicketCreate
 from app.services.ai.embeddings import EmbeddingProvider
 from app.services.ai.providers.base import ToolSpec
 from app.services.documents import queries as document_queries
@@ -40,6 +44,7 @@ from app.services.rag import search as rag
 from app.services.tasks import queries as task_queries
 from app.services.tasks import service as task_service
 from app.services.tasks.service import STATUS_LABELS
+from app.services.tickets import service as ticket_service
 
 PRIORITY_LABELS = {
     TaskPriority.LOW: "ต่ำ",
@@ -110,6 +115,20 @@ class SearchDocumentsArgs(StrictArgs):
 
 class DocumentIdArgs(StrictArgs):
     document_id: uuid.UUID
+
+
+class GetMyTicketsArgs(StrictArgs):
+    include_closed: bool = False
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class CreateTicketArgs(StrictArgs):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    description: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=5000)
+    ]
+    category: TicketCategory = TicketCategory.OTHER
+    priority: TaskPriority = TaskPriority.MEDIUM
 
 
 class UpdateTaskStatusArgs(StrictArgs):
@@ -277,6 +296,60 @@ async def _read_document(ctx: ToolContext, args: BaseModel) -> dict[str, Any]:
         "instructions": SOURCE_RULES
         + " If the text is truncated, say that the summary covers only the beginning.",
     }
+
+
+async def _get_my_tickets(ctx: ToolContext, args: BaseModel) -> dict[str, Any]:
+    assert isinstance(args, GetMyTicketsArgs)  # noqa: S101
+    rows, total = await ticket_repo.list_tickets(
+        ctx.session,
+        ctx.user,
+        TicketFilters(scope="mine", open_only=not args.include_closed),
+        sort="updated",
+        page=1,
+        page_size=args.limit,
+    )
+    return {
+        "total": total,
+        "tickets": [
+            {
+                "number": r.ticket.ticket_number,
+                "title": r.ticket.title,
+                "status": r.ticket.status,
+                "status_label": ticket_service.STATUS_LABELS[TicketStatus(r.ticket.status)],
+                "category": r.ticket.category,
+                "assignee": r.assignee_name,
+                "updated_at": _local(r.ticket.updated_at, ctx.settings.app_timezone),
+                "link": f"/helpdesk/{r.ticket.id}",
+            }
+            for r in rows
+        ],
+    }
+
+
+async def _precheck_ticket(ctx: ToolContext, args: BaseModel) -> str:
+    assert isinstance(args, CreateTicketArgs)  # noqa: S101
+    _require(ctx.user, P.TICKETS_CREATE)
+    return (
+        f"แจ้งปัญหาไอที “{args.title}” · หมวด{ticket_service.CATEGORY_LABELS[args.category]}"
+        f" · ความสำคัญ{PRIORITY_LABELS[args.priority]}"
+    )
+
+
+async def _execute_ticket(ctx: ToolContext, args: BaseModel) -> dict[str, Any]:
+    assert isinstance(args, CreateTicketArgs)  # noqa: S101
+    ticket_id = await ticket_service.create_ticket(
+        ctx.session,
+        ctx.settings,
+        ctx.user,
+        TicketCreate(
+            title=args.title,
+            description=args.description,
+            category=args.category,
+            priority=args.priority,
+        ),
+        ctx.meta,
+    )
+    return {"ticket_id": str(ticket_id), "link": f"/helpdesk/{ticket_id}"}
 
 
 async def _precheck_create(ctx: ToolContext, args: BaseModel) -> str:
@@ -457,6 +530,45 @@ TOOLS: dict[str, AiTool] = {
             args_model=FindColleaguesArgs,
             permissions=(P.TASKS_READ_OWN,),
             run=_find_colleagues,
+        ),
+        AiTool(
+            name="get_my_tickets",
+            label="ดูรายการแจ้งปัญหาของคุณ",
+            description=(
+                "List IT helpdesk tickets the user reported (open ones unless include_closed)."
+            ),
+            input_schema=_object(
+                {
+                    "include_closed": {"type": "boolean"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+                },
+                [],
+            ),
+            args_model=GetMyTicketsArgs,
+            permissions=(P.TICKETS_READ_OWN,),
+            run=_get_my_tickets,
+        ),
+        AiTool(
+            name="create_ticket",
+            label="เตรียมแจ้งปัญหาไอที",
+            description=(
+                "PROPOSE an IT helpdesk ticket for the user (computer, network, printer, "
+                "software, account access). Nothing is sent until the user confirms. Ask for a "
+                "clear description of the problem first if it is missing."
+            ),
+            input_schema=_object(
+                {
+                    "title": {"type": "string", "maxLength": 300},
+                    "description": {"type": "string", "maxLength": 5000},
+                    "category": {"type": "string", "enum": [c.value for c in TicketCategory]},
+                    "priority": {"type": "string", "enum": [p.value for p in TaskPriority]},
+                },
+                ["title", "description"],
+            ),
+            args_model=CreateTicketArgs,
+            permissions=(P.TICKETS_CREATE,),
+            precheck=_precheck_ticket,
+            execute=_execute_ticket,
         ),
         AiTool(
             name="create_task",
