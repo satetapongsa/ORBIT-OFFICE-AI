@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { MAIN_NAV, isNavItemActive } from "@/lib/navigation";
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }));
 
 let permissions = new Set<string>();
 vi.mock("@/features/auth/hooks/use-session", () => ({
@@ -37,16 +37,19 @@ describe("SidebarNav", () => {
 
   it("does not render links for modules that are not implemented yet", () => {
     render(<SidebarNav />);
-    const dashboard = screen.getByTestId("nav-dashboard");
-    expect(dashboard.tagName).not.toBe("A");
-    expect(dashboard).toHaveAttribute("aria-disabled", "true");
+    const assistant = screen.getByTestId("nav-assistant"); // Phase 6
+    expect(assistant.tagName).not.toBe("A");
+    expect(assistant).toHaveAttribute("aria-disabled", "true");
+    expect(assistant).toHaveTextContent("เร็วๆ นี้");
+    for (const key of ["dashboard", "notifications", "system-status"]) {
+      expect(screen.getByTestId(`nav-${key}`).tagName).toBe("A");
+    }
   });
 
   it("marks the current page as active", () => {
     render(<SidebarNav />);
-    const status = screen.getByTestId("nav-system-status");
-    expect(status.tagName).toBe("A");
-    expect(status).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("nav-dashboard")).toHaveAttribute("aria-current", "page");
+    expect(screen.getByTestId("nav-system-status")).not.toHaveAttribute("aria-current");
   });
 });
 

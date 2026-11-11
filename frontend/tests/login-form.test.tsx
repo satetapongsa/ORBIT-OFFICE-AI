@@ -77,6 +77,6 @@ describe("LoginForm", () => {
     await userEvent.type(screen.getByLabelText("อีเมล"), "emp@example.com");
     await userEvent.type(screen.getByLabelText("รหัสผ่าน"), "Correct-Password-1");
     await userEvent.click(screen.getByRole("button", { name: "เข้าสู่ระบบ" }));
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/dashboard"));
   });
 });
