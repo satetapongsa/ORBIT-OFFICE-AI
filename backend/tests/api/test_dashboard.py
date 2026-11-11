@@ -42,20 +42,20 @@ def test_dashboard_requires_authentication(new_client: NewClient) -> None:
     assert new_client().get(URL).status_code == 401
 
 
-# documents / organization / security present?
+# documents / tasks / organization / security present?
 EXPECTED_SECTIONS = {
-    "EMPLOYEE": (True, False, False),
-    "MANAGER": (True, True, False),
-    "HR": (True, True, False),
-    "IT_SUPPORT": (True, True, False),
-    "ADMIN": (True, True, True),
+    "EMPLOYEE": (True, True, False, False),
+    "MANAGER": (True, True, True, False),
+    "HR": (True, True, True, False),
+    "IT_SUPPORT": (True, True, True, False),
+    "ADMIN": (True, True, True, True),
 }
 
 
 @pytest.mark.parametrize("role", sorted(EXPECTED_SECTIONS))
 def test_sections_follow_permissions(as_user: AsUser, role: str) -> None:
     body = _summary(as_user([role]))
-    present = tuple(body[k] is not None for k in ("documents", "organization", "security"))
+    present = tuple(body[k] is not None for k in ("documents", "tasks", "organization", "security"))
     assert present == EXPECTED_SECTIONS[role]
     # Personal sections are always present.
     assert body["account"]["roles"][0]["code"] == role
@@ -65,6 +65,7 @@ def test_sections_follow_permissions(as_user: AsUser, role: str) -> None:
 def test_user_without_permissions_sees_only_personal_sections(as_user: AsUser) -> None:
     body = _summary(as_user([]))
     assert body["documents"] is None
+    assert body["tasks"] is None
     assert body["organization"] is None
     assert body["security"] is None
     assert body["account"]["roles"] == []
