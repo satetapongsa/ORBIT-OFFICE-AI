@@ -128,3 +128,62 @@ ports on `127.0.0.1` only, so host processes stalled on IPv6 attempts
 (integration run: 150 s vs 1.6 s).
 **Decision.** `.env.example`, settings defaults, the smoke test and the Next.js
 proxy default use `127.0.0.1`. Container-to-container URLs keep service names.
+The Next.js dev server must then trust that origin: `allowedDevOrigins: ["127.0.0.1"]`
+(otherwise it blocks its own JS/HMR resources and the app never hydrates).
+
+## ADR-016 — Session model: short JWT + rotating opaque refresh token per "family" (2026-11-11)
+**Context.** Browser sessions must be revocable immediately (logout, deactivation,
+password change, stolen refresh token) without putting long-lived tokens in JavaScript.
+**Decision.** 15-minute HS256 access JWT whose `sid` is the login's *family id*; refresh
+tokens are opaque, stored hashed, one `user_sessions` row per issued token, rotated on
+every use. Every request checks that the family is still active and that the token was
+issued after the last password change. Re-use of a rotated token revokes the family,
+except within a 10-second grace window (parallel tabs) where it is only rejected.
+**Consequences.** One indexed `EXISTS` query per request; logout and revocation are
+instant; two tabs refreshing together do not log the user out.
+
+## ADR-017 — CSRF: double-submit cookie, Bearer exempt (2026-11-11)
+**Decision.** `aura_csrf` (readable, `SameSite=Lax`) must equal `X-CSRF-Token` on
+cookie-authenticated unsafe requests, including refresh/logout. Requests authenticated
+with `Authorization: Bearer` carry no ambient credentials and are exempt. Login and
+password-reset endpoints are unauthenticated and exempt.
+**Consequences.** The frontend API client echoes the cookie automatically; non-browser
+clients use Bearer tokens.
+
+## ADR-018 — Privilege escalation rule: you can only grant what you hold (2026-11-11)
+**Decision.** Creating/editing roles and assigning/removing roles both require the
+actor to hold every affected permission. `ADMIN`'s permission set is locked to the code
+catalogue; the last active admin cannot be demoted or deactivated.
+**Consequences.** Delegated administrators (e.g. HR with `users:create`) cannot create
+or promote accounts above their own privileges.
+
+## ADR-019 — Document ACL foundation lands in Phase 2 (2026-11-11)
+**Context.** The ACL predicate must exist before any document feature uses it.
+**Decision.** Migration `0002` creates the core `documents` row and `document_acl`;
+`repositories/document_access.accessible_documents_condition` is the single SQL
+predicate, tested against PostgreSQL. Phase 4 adds versions, storage and categories.
+**Consequences.** Phase 4/7 code must import this predicate instead of re-implementing rules.
+
+## ADR-020 — Test database and test isolation (2026-11-11)
+**Decision.** Tests use a separate database (`aura_office_test`, or `AURA_TEST_DATABASE_URL`)
+created and migrated automatically by `tests/conftest.py`; tables are truncated and RBAC
+re-synced before every DB test. The fixture refuses database names without `test`.
+`DATABASE_USE_NULL_POOL=true` avoids sharing pooled connections between the event loops of
+separate TestClients. DB tests are skipped (with a reason) only when PostgreSQL is unreachable.
+**Consequences.** Running the suite never touches development data; `scripts/check.sh`
+can run the backend part inside the container (`CHECK_BACKEND_IN_DOCKER=1`).
+
+## ADR-021 — Client-side session gate (2026-11-11)
+**Decision.** Pages under `app/(app)` render only after `GET /auth/me` succeeds
+(`AuthGate`); unauthenticated users are redirected to `/login?next=…` (internal paths
+only). The API client refreshes once on 401 (single-flight) and retries; if that fails the
+gate redirects. `export const instant = false` on `(app)/layout.tsx` opts the gated segment
+out of Next.js instant-navigation validation. Hiding UI is cosmetic — the backend enforces
+every permission.
+**Consequences.** No server-side session reads in Next.js; a server-rendered gate can be
+added later (Next.js `proxy.ts`) if needed.
+
+## ADR-022 — Test/dev e-mail domains (2026-11-11)
+**Context.** `email-validator` rejects special-use domains such as `.local` and `.test`.
+**Decision.** Development seed accounts use `@aura.example.com`, tests use `@example.com`
+(RFC 2606 documentation domains, accepted by the validator, never deliverable).

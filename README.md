@@ -4,8 +4,8 @@
 tasks, documents, IT helpdesk, employee information, analytics and an AI
 assistant that answers only from company data the user is authorised to see.
 
-> Status: **Phase 1 — system foundation**. Business modules are delivered in
-> later phases. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+> Status: **Phase 2 — authentication & authorization** complete. Business modules are
+> delivered in later phases. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
 ## Stack
 
@@ -21,12 +21,14 @@ assistant that answers only from company data the user is authorised to see.
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up --build -d
+docker compose exec backend python -m app.cli seed-dev   # development accounts
 ```
 
-- App: http://localhost:3000
-- API docs: http://localhost:8000/api/docs
-- Readiness: http://localhost:8000/api/v1/health
+- App: http://127.0.0.1:3000 — sign in as `admin@aura.example.com` (or `manager@`, `hr@`,
+  `it@`, `employee@`) with `SEED_DEV_PASSWORD` from `.env`
+- API docs: http://127.0.0.1:8000/api/docs
+- Readiness: http://127.0.0.1:8000/api/v1/health
 
 Running without Docker, tests and troubleshooting: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
