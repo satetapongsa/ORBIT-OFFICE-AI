@@ -36,6 +36,13 @@ class AuditAction(StrEnum):
     DEPARTMENT_CREATED = "department.created"
     DEPARTMENT_UPDATED = "department.updated"
     DEPARTMENT_DELETED = "department.deleted"
+    DOCUMENT_UPLOADED = "document.uploaded"
+    DOCUMENT_VERSION_UPLOADED = "document.version_uploaded"
+    DOCUMENT_UPDATED = "document.updated"
+    DOCUMENT_DELETED = "document.deleted"
+    DOCUMENT_DOWNLOADED = "document.downloaded"
+    DOCUMENT_ACL_CHANGED = "document.acl_changed"
+    DOCUMENT_REPROCESS_REQUESTED = "document.reprocess_requested"
 
 
 def record(

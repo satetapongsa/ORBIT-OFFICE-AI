@@ -169,6 +169,27 @@ def account_reactivated(session: AsyncSession, user_id: uuid.UUID) -> None:
     )
 
 
+def document_shared(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    document_id: uuid.UUID,
+    title: str,
+    level_label: str,
+    shared_by: str,
+) -> None:
+    notify(
+        session,
+        user_id=user_id,
+        type=NotificationType.DOCUMENT,
+        title=f"มีการแชร์เอกสารให้คุณ: {title}",
+        body=f"{shared_by} ให้สิทธิ์{level_label}",
+        link_url=f"/documents/{document_id}",
+        entity_type="document",
+        entity_id=document_id,
+    )
+
+
 # --- Reader operations -------------------------------------------------------------------
 
 
