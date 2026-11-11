@@ -17,7 +17,9 @@ from app.core.errors import register_exception_handlers
 from app.core.event_loop import is_unsupported_windows_loop
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware
-from app.core.redis import close_redis
+from app.core.notifications import LogPasswordResetNotifier
+from app.core.rate_limit import RedisRateLimiter
+from app.core.redis import close_redis, get_redis
 from app.core.storage import get_storage
 
 logger = get_logger(__name__)
@@ -69,6 +71,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.rate_limiter = RedisRateLimiter(get_redis())
+    app.state.reset_notifier = LogPasswordResetNotifier(settings)
 
     register_exception_handlers(app)
 
