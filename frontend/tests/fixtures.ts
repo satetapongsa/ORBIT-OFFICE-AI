@@ -73,7 +73,18 @@ export function employeeSummary(): DashboardSummary {
       password_changed_at: "2026-11-01T02:00:00Z",
       active_sessions: 2,
     },
-    notifications: { unread_count: 1, latest: [notification()] },
+    notifications: {
+      unread_count: 2,
+      latest: [
+        notification(),
+        notification({
+          id: "n-2",
+          type: "DOCUMENT",
+          title: "มีการแชร์เอกสารให้คุณ: นโยบายการลา",
+          link_url: "/documents/doc-1",
+        }),
+      ],
+    },
     my_activity: {
       daily_sign_ins: days.map((date, i) => ({ date, count: i === 13 ? 3 : i % 3 })),
       recent: [
@@ -93,7 +104,22 @@ export function employeeSummary(): DashboardSummary {
         },
       ],
     },
-    documents: { accessible_count: 7 },
+    documents: {
+      accessible_count: 7,
+      my_documents: 2,
+      my_processing: 1,
+      my_failed: 0,
+      recent: [
+        {
+          id: "doc-1",
+          title: "นโยบายการลา",
+          category: "POLICY",
+          file_type: "PDF",
+          processing_status: "READY",
+          updated_at: "2026-11-11T05:00:00Z",
+        },
+      ],
+    },
     organization: null,
     security: null,
   };

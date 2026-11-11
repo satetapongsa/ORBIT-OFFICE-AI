@@ -16,7 +16,7 @@ describe("DashboardView", () => {
     render(<DashboardView />, { wrapper: createWrapper() });
 
     expect(await screen.findByText("สวัสดี, สมชาย ใจดี")).toBeInTheDocument();
-    expect(screen.getByTestId("stat-unread")).toHaveTextContent("1");
+    expect(screen.getByTestId("stat-unread")).toHaveTextContent("2");
     expect(screen.getByTestId("stat-sessions")).toHaveTextContent("2");
     expect(screen.getByTestId("stat-documents")).toHaveTextContent("7");
     // Fixture period: (0+1+2)×4 + 0 + 3 = 15 sign-ins.
@@ -30,6 +30,18 @@ describe("DashboardView", () => {
     expect(
       within(preview).getByRole("link", { name: /รหัสผ่านของคุณถูกเปลี่ยนแล้ว/ }),
     ).toHaveAttribute("href", "/account");
+
+    // Document notifications (Phase 4) are part of the preview.
+    expect(within(preview).getByRole("link", { name: /มีการแชร์เอกสารให้คุณ/ })).toHaveAttribute(
+      "href",
+      "/documents/doc-1",
+    );
+    const docs = screen.getByTestId("documents-card");
+    expect(docs).toHaveTextContent("เอกสารของคุณ 2 รายการ · กำลังประมวลผล 1");
+    expect(within(docs).getByRole("link", { name: /นโยบายการลา/ })).toHaveAttribute(
+      "href",
+      "/documents/doc-1",
+    );
 
     const activity = within(screen.getByTestId("my-activity")).getAllByTestId("activity-item");
     expect(activity[0]).toHaveTextContent("เข้าสู่ระบบ");
