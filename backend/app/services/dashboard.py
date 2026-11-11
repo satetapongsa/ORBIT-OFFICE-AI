@@ -5,6 +5,7 @@ equivalent detailed API, so the dashboard never reveals more than the user could
 
 * account, own notifications and own activity — every signed-in user;
 * ``documents`` — ``documents:read``, counted through the single ACL predicate;
+* ``tasks`` — ``tasks:read_own``: my open assigned tasks, through the task visibility predicate;
 * ``organization`` — ``users:read`` (same data as ``GET /users`` / ``/departments``);
 * ``security`` — ``audit:read`` (same data as ``GET /audit-logs``).
 """
@@ -25,6 +26,7 @@ from app.core.security import utcnow
 from app.models.audit import AuditLog
 from app.repositories import dashboard as dashboard_repo
 from app.repositories import notifications as notification_repo
+from app.repositories import tasks as task_repo
 from app.repositories import users as user_repo
 from app.schemas.dashboard import (
     AccountSummary,
@@ -40,6 +42,8 @@ from app.schemas.dashboard import (
     OrganizationSummary,
     RecentDocument,
     SecuritySummary,
+    TaskSummary,
+    UpcomingTask,
 )
 from app.schemas.identity import DepartmentRef, RoleRef
 from app.schemas.notifications import NotificationOut
@@ -49,6 +53,8 @@ PERIOD_DAYS = 14
 RECENT_LIMIT = 8
 NOTIFICATION_PREVIEW = 5
 RECENT_DOCUMENTS = 5
+UPCOMING_TASKS = 5
+DUE_SOON = timedelta(days=7)
 
 
 def _period(now: datetime, tz: str) -> tuple[list[date], datetime]:
@@ -154,6 +160,36 @@ async def build_summary(
                 for doc, version in await dashboard_repo.recent_documents(
                     session, user, limit=RECENT_DOCUMENTS
                 )
+            ],
+        )
+
+    if user.has(P.TASKS_READ_OWN):
+        open_assigned, overdue, due_soon = await task_repo.my_task_counts(
+            session, user, now, now + DUE_SOON
+        )
+        upcoming, _ = await task_repo.list_tasks(
+            session,
+            user,
+            task_repo.TaskFilters(scope="assigned", open_only=True),
+            now=now,
+            sort="due",
+            page=1,
+            page_size=UPCOMING_TASKS,
+        )
+        summary.tasks = TaskSummary(
+            open_assigned=open_assigned,
+            overdue=overdue,
+            due_soon=due_soon,
+            upcoming=[
+                UpcomingTask(
+                    id=row.task.id,
+                    title=row.task.title,
+                    status=row.task.status,
+                    priority=row.task.priority,
+                    due_at=row.task.due_at,
+                    is_overdue=row.task.due_at is not None and row.task.due_at < now,
+                )
+                for row in upcoming
             ],
         )
 

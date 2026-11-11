@@ -73,6 +73,22 @@ class DocumentSummary(BaseModel):
     recent: list[RecentDocument] = Field(description="Latest updated documents the user may view.")
 
 
+class UpcomingTask(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: str
+    priority: str
+    due_at: datetime | None
+    is_overdue: bool
+
+
+class TaskSummary(BaseModel):
+    open_assigned: int = Field(ge=0, description="Open tasks assigned to me.")
+    overdue: int = Field(ge=0, description="Of those, past their due time.")
+    due_soon: int = Field(ge=0, description="Of those, due within the next 7 days.")
+    upcoming: list[UpcomingTask] = Field(description="My open tasks, earliest due first.")
+
+
 class DepartmentHeadcount(BaseModel):
     department: DepartmentRef | None  # None = users without a department
     count: int = Field(ge=0)
@@ -107,5 +123,6 @@ class DashboardSummary(BaseModel):
     notifications: NotificationSummary
     my_activity: MyActivity
     documents: DocumentSummary | None = Field(description="Requires `documents:read`.")
+    tasks: TaskSummary | None = Field(default=None, description="Requires `tasks:read_own`.")
     organization: OrganizationSummary | None = Field(description="Requires `users:read`.")
     security: SecuritySummary | None = Field(description="Requires `audit:read`.")
