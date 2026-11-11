@@ -16,6 +16,12 @@ const nextConfig: NextConfig = {
   // The dev server only trusts `localhost` by default; local URLs use 127.0.0.1 (ADR-015).
   allowedDevOrigins: ["127.0.0.1"],
   cacheComponents: true,
+  experimental: {
+    // The /api rewrite buffers request bodies (default 10 MB). Match Nginx's
+    // client_max_body_size so document uploads up to UPLOAD_MAX_BYTES (25 MB) pass through;
+    // the backend enforces the real limit.
+    proxyClientMaxBodySize: "30mb",
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {
