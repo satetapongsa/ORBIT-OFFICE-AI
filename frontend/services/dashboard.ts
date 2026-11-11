@@ -37,7 +37,24 @@ export const dashboardSummarySchema = z.object({
     daily_sign_ins: z.array(dailyCountSchema),
     recent: z.array(activityItemSchema),
   }),
-  documents: z.object({ accessible_count: z.number().int().nonnegative() }).nullable(),
+  documents: z
+    .object({
+      accessible_count: z.number().int().nonnegative(),
+      my_documents: z.number().int().nonnegative(),
+      my_processing: z.number().int().nonnegative(),
+      my_failed: z.number().int().nonnegative(),
+      recent: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          category: z.string(),
+          file_type: z.string().nullable(),
+          processing_status: z.string().nullable(),
+          updated_at: z.string(),
+        }),
+      ),
+    })
+    .nullable(),
   organization: z
     .object({
       active_users: z.number().int().nonnegative(),

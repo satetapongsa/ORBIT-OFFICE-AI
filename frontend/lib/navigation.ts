@@ -31,7 +31,7 @@ export interface NavItem {
 export const HOME_PATH = "/dashboard";
 
 /** Development phase that is currently implemented (see docs/PROJECT_STATUS.md). */
-export const CURRENT_PHASE = 3;
+export const CURRENT_PHASE = 4;
 
 export const MAIN_NAV: NavItem[] = [
   {

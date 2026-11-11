@@ -34,9 +34,17 @@ import { DepartmentBars } from "@/features/dashboard/components/department-bars"
 import { StatCard } from "@/features/dashboard/components/stat-card";
 import { useDashboardSummary } from "@/features/dashboard/hooks/use-dashboard-summary";
 import { NotificationItem } from "@/features/notifications/components/notification-item";
-import { formatDateTime, formatDay, formatLongDate, numberFormat } from "@/lib/format";
+import { ProcessingBadge } from "@/features/documents/components/processing-badge";
+import {
+  formatDateTime,
+  formatDay,
+  formatLongDate,
+  formatRelative,
+  numberFormat,
+} from "@/lib/format";
 import { ApiError } from "@/services/api-client";
 import type { DashboardSummary } from "@/services/dashboard";
+import { processingStatusSchema, type ProcessingStatus } from "@/services/documents";
 
 const SERIES_SIGN_INS = { key: "sign_ins", label: "เข้าสู่ระบบสำเร็จ", color: "var(--chart-1)" };
 const SERIES_FAILED = { key: "failed", label: "เข้าสู่ระบบไม่สำเร็จ", color: "var(--chart-2)" };
@@ -136,7 +144,14 @@ function PersonalSection({ data, selfId }: { data: DashboardSummary; selfId?: st
             label="เอกสารที่คุณเข้าถึงได้"
             value={data.documents.accessible_count}
             icon={FileText}
-            hint="นับตามสิทธิ์การเข้าถึงของคุณ"
+            hint={
+              <Link
+                href="/documents"
+                className="hover:text-foreground underline-offset-2 hover:underline"
+              >
+                เปิดศูนย์เอกสาร
+              </Link>
+            }
           />
         ) : null}
       </div>
@@ -254,8 +269,69 @@ function PersonalSection({ data, selfId }: { data: DashboardSummary; selfId?: st
           </CardContent>
         </Card>
       </div>
+
+      {data.documents ? <DocumentsCard documents={data.documents} /> : null}
     </div>
   );
+}
+
+function DocumentsCard({ documents }: { documents: NonNullable<DashboardSummary["documents"]> }) {
+  return (
+    <Card data-testid="documents-card">
+      <CardHeader>
+        <CardTitle>เอกสารล่าสุด</CardTitle>
+        <CardDescription>
+          เอกสารของคุณ {numberFormat.format(documents.my_documents)} รายการ
+          {documents.my_processing > 0
+            ? ` · กำลังประมวลผล ${numberFormat.format(documents.my_processing)}`
+            : ""}
+          {documents.my_failed > 0
+            ? ` · ประมวลผลไม่สำเร็จ ${numberFormat.format(documents.my_failed)}`
+            : ""}
+        </CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/documents">ดูทั้งหมด</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {documents.recent.length === 0 ? (
+          <p className="text-muted-foreground py-6 text-center text-sm">
+            ยังไม่มีเอกสารที่คุณเข้าถึงได้
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {documents.recent.map((doc) => (
+              <li key={doc.id}>
+                <Link
+                  href={`/documents/${doc.id}`}
+                  className="hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-2.5 text-sm"
+                >
+                  <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold">
+                    {doc.file_type ?? "—"}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{doc.title}</span>
+                    <span className="text-muted-foreground block text-xs">
+                      {formatRelative(doc.updated_at)}
+                    </span>
+                  </span>
+                  {doc.processing_status && isProcessingStatus(doc.processing_status) ? (
+                    <ProcessingBadge status={doc.processing_status} />
+                  ) : null}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function isProcessingStatus(value: string): value is ProcessingStatus {
+  return (processingStatusSchema.options as readonly string[]).includes(value);
 }
 
 function OrganizationSection({ org }: { org: NonNullable<DashboardSummary["organization"]> }) {
