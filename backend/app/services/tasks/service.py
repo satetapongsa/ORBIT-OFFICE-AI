@@ -152,7 +152,7 @@ async def _lock(session: AsyncSession, task_id: uuid.UUID) -> Task:
     return task
 
 
-async def _validate_assignees(
+async def validate_assignees(
     session: AsyncSession,
     user: CurrentUser,
     department_id: uuid.UUID | None,
@@ -206,7 +206,7 @@ async def create_task(
     requested = data.assignee_ids or [user.id]
     if any(uid != user.id for uid in requested):
         _deny(user.has(P.TASKS_ASSIGN), "คุณไม่มีสิทธิ์มอบหมายงานให้ผู้อื่น")
-    assignees = await _validate_assignees(session, user, department_id, requested)
+    assignees = await validate_assignees(session, user, department_id, requested)
 
     task = Task(
         title=data.title,
@@ -347,7 +347,7 @@ async def replace_assignees(
     access = await get_access(session, user, task_id)
     _deny(access.capabilities.can_assign, "คุณไม่มีสิทธิ์มอบหมายงานนี้")
     task = await _lock(session, task_id)
-    wanted = await _validate_assignees(session, user, task.department_id, user_ids)
+    wanted = await validate_assignees(session, user, task.department_id, user_ids)
     wanted_ids = {uid for uid, _ in wanted}
     current = {link.user_id: link for link in await task_repo.assignee_links(session, task_id)}
     removed = [uid for uid in current if uid not in wanted_ids]
