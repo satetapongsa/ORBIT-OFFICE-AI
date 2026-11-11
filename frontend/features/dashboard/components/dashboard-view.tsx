@@ -35,6 +35,7 @@ import { StatCard } from "@/features/dashboard/components/stat-card";
 import { useDashboardSummary } from "@/features/dashboard/hooks/use-dashboard-summary";
 import { NotificationItem } from "@/features/notifications/components/notification-item";
 import { ProcessingBadge } from "@/features/documents/components/processing-badge";
+import { DueLabel, TaskStatusBadge } from "@/features/tasks/components/task-badges";
 import {
   formatDateTime,
   formatDay,
@@ -270,8 +271,55 @@ function PersonalSection({ data, selfId }: { data: DashboardSummary; selfId?: st
         </Card>
       </div>
 
-      {data.documents ? <DocumentsCard documents={data.documents} /> : null}
+      {data.tasks || data.documents ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {data.tasks ? <TasksCard tasks={data.tasks} /> : null}
+          {data.documents ? <DocumentsCard documents={data.documents} /> : null}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function TasksCard({ tasks }: { tasks: NonNullable<DashboardSummary["tasks"]> }) {
+  return (
+    <Card data-testid="tasks-card">
+      <CardHeader>
+        <CardTitle>งานของฉัน</CardTitle>
+        <CardDescription>
+          งานที่ยังไม่เสร็จ {numberFormat.format(tasks.open_assigned)} งาน
+          {tasks.overdue > 0 ? ` · เลยกำหนด ${numberFormat.format(tasks.overdue)}` : ""}
+          {tasks.due_soon > 0 ? ` · ครบกำหนดใน 7 วัน ${numberFormat.format(tasks.due_soon)}` : ""}
+        </CardDescription>
+        <CardAction>
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/tasks">ดูทั้งหมด</Link>
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent>
+        {tasks.upcoming.length === 0 ? (
+          <p className="text-muted-foreground py-6 text-center text-sm">ไม่มีงานค้าง</p>
+        ) : (
+          <ul className="divide-y">
+            {tasks.upcoming.map((task) => (
+              <li key={task.id}>
+                <Link
+                  href={`/tasks/${task.id}`}
+                  className="hover:bg-muted/50 flex items-center gap-3 rounded-md px-2 py-2.5 text-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{task.title}</span>
+                    <DueLabel dueAt={task.due_at} overdue={task.is_overdue} />
+                  </span>
+                  <TaskStatusBadge status={task.status} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -31,7 +31,7 @@ export interface NavItem {
 export const HOME_PATH = "/dashboard";
 
 /** Development phase that is currently implemented (see docs/PROJECT_STATUS.md). */
-export const CURRENT_PHASE = 4;
+export const CURRENT_PHASE = 5;
 
 export const MAIN_NAV: NavItem[] = [
   {
@@ -116,8 +116,9 @@ export const SECONDARY_NAV: NavItem[] = [
     href: "/settings",
     icon: Settings,
     permission: "system:configure",
-    // The user/role administration UI ships with the Employee Center (Phase 5).
-    phase: 5,
+    // User accounts are managed in the Employee Center (Phase 5); role/permission editing
+    // and system settings ship with Phase 8.
+    phase: 8,
   },
 ];
 
