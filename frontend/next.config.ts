@@ -25,6 +25,10 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  async redirects() {
+    // The dashboard is the home page of the signed-in application.
+    return [{ source: "/", destination: "/dashboard", permanent: false }];
+  },
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${backendUrl}/api/:path*` }];
   },

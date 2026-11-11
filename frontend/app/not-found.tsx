@@ -13,7 +13,7 @@ export default function NotFound() {
         description="หน้านี้อาจถูกย้าย ถูกลบ หรือยังไม่เปิดให้ใช้งาน"
         action={
           <Button asChild variant="outline">
-            <Link href="/">กลับหน้าหลัก</Link>
+            <Link href="/dashboard">กลับหน้าหลัก</Link>
           </Button>
         }
       />

@@ -22,7 +22,7 @@ export function SystemStatusIndicator() {
 
   return (
     <Link
-      href="/"
+      href="/system-status"
       className="text-muted-foreground hover:bg-muted flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors"
       aria-live="polite"
     >

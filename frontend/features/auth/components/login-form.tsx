@@ -11,6 +11,7 @@ import { FormField } from "@/components/common/form-field";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useSetSession } from "@/features/auth/hooks/use-session";
+import { HOME_PATH } from "@/lib/navigation";
 import { loginSchema, type LoginValues } from "@/features/auth/schemas";
 import { ApiError } from "@/services/api-client";
 import { login, safeRedirectPath } from "@/services/auth";
@@ -28,7 +29,7 @@ export function LoginForm() {
     mutationFn: (values: LoginValues) => login(values.email, values.password),
     onSuccess: (me) => {
       setSession(me);
-      router.replace(safeRedirectPath(params.get("next")));
+      router.replace(safeRedirectPath(params.get("next"), HOME_PATH));
     },
     onError: () => form.resetField("password"),
   });

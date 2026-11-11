@@ -27,8 +27,11 @@ export interface NavItem {
   phase: number;
 }
 
+/** Landing page after sign-in (`/` redirects here). */
+export const HOME_PATH = "/dashboard";
+
 /** Development phase that is currently implemented (see docs/PROJECT_STATUS.md). */
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;
 
 export const MAIN_NAV: NavItem[] = [
   {
@@ -93,7 +96,8 @@ export const MAIN_NAV: NavItem[] = [
     href: "/notifications",
     icon: Bell,
     permission: null,
-    phase: 8,
+    // The inbox ships with the dashboard (Phase 3); Phase 8 adds module notifications.
+    phase: 3,
   },
 ];
 
@@ -101,7 +105,7 @@ export const SECONDARY_NAV: NavItem[] = [
   {
     key: "system-status",
     label: "สถานะระบบ",
-    href: "/",
+    href: "/system-status",
     icon: Activity,
     permission: null,
     phase: 1,
@@ -127,6 +131,5 @@ export function isNavItemAvailable(item: NavItem, currentPhase: number = CURRENT
 }
 
 export function isNavItemActive(item: NavItem, pathname: string): boolean {
-  if (item.href === "/") return pathname === "/";
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
