@@ -1,5 +1,6 @@
 """ORM models. Import every model module here so Alembic autogenerate sees all tables."""
 
+from app.models.ai import ActionStatus, AiActionRequest, ChatMessage, ChatRole, ChatSession
 from app.models.audit import AuditLog
 from app.models.auth import PasswordResetToken, UserSession
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -40,8 +41,13 @@ from app.models.task import (
 
 __all__ = [
     "AccessLevel",
+    "ActionStatus",
+    "AiActionRequest",
     "AuditLog",
     "Base",
+    "ChatMessage",
+    "ChatRole",
+    "ChatSession",
     "Department",
     "Document",
     "DocumentAcl",
