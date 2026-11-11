@@ -28,7 +28,7 @@ from app.models.auth import PasswordResetToken, UserSession
 from app.models.identity import User
 from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
-from app.services import audit
+from app.services import audit, notifications
 from app.services.audit import AuditAction
 from app.services.passwords import validate_new_password
 
@@ -206,6 +206,7 @@ async def refresh(
             entity_id=current.user_id,
             details={"family_id": str(current.family_id)},
         )
+        notifications.suspicious_session(session, current.user_id)
         await session.commit()
         logger.warning("refresh_token_reuse_detected", user_id=str(current.user_id))
         raise UnauthenticatedError(SESSION_EXPIRED)
@@ -304,6 +305,7 @@ async def change_password(
         entity_type="user",
         entity_id=user.id,
     )
+    notifications.password_changed(session, user.id, via_reset=False)
     await session.commit()
     return LoginResult(user=user, tokens=tokens)
 
@@ -380,4 +382,5 @@ async def confirm_password_reset(
         entity_type="user",
         entity_id=user.id,
     )
+    notifications.password_changed(session, user.id, via_reset=True)
     await session.commit()

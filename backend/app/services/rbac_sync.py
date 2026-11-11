@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.permissions import ALL_PERMISSIONS, PERMISSION_DESCRIPTIONS, SYSTEM_ROLES, SystemRole
 from app.core.security import hash_password, utcnow
 from app.models.identity import Department, Permission, Role, User, UserRole
+from app.services import notifications
 
 
 @dataclass
@@ -140,6 +141,7 @@ def seed_dev(session: Session, password: str) -> list[str]:
 
     roles = {r.code: r for r in session.scalars(select(Role))}
     created: list[str] = []
+    new_users: list[User] = []
     password_hash = hash_password(password)
     for emp_code, email, first, last, dept, role_codes, title in DEV_USERS:
         if session.scalar(select(User.id).where(User.email == email)) is not None:
@@ -159,7 +161,10 @@ def seed_dev(session: Session, password: str) -> list[str]:
         user.role_links = [UserRole(role_id=roles[r.value].id) for r in role_codes]
         session.add(user)
         created.append(email)
+        new_users.append(user)
     session.flush()
+    for user in new_users:
+        notifications.welcome(session, user.id)
     if "SALES" in depts:
         manager = session.scalar(select(User).where(User.email == "manager@aura.example.com"))
         if manager and depts["SALES"].manager_id is None:

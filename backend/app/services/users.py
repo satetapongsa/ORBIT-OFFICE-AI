@@ -23,7 +23,7 @@ from app.repositories import sessions as session_repo
 from app.repositories import users as user_repo
 from app.schemas.common import ErrorDetail
 from app.schemas.identity import UserCreate, UserUpdate
-from app.services import audit
+from app.services import audit, notifications
 from app.services.audit import AuditAction
 from app.services.passwords import validate_new_password
 from app.services.rbac import ensure_admin_remains, ensure_can_grant
@@ -106,6 +106,7 @@ async def create_user(
         entity_id=user.id,
         details={"email": user.email, "roles": role_codes},
     )
+    notifications.welcome(session, user.id)
     await session.commit()
     return await get_user(session, user.id, reload=True)
 
@@ -142,6 +143,8 @@ async def update_user(
         entity_id=user.id,
         details={"fields": sorted(changes)},
     )
+    if user.id != actor.id:
+        notifications.account_updated(session, user.id, sorted(changes))
     await session.commit()
     return await get_user(session, user.id, reload=True)
 
@@ -161,8 +164,9 @@ async def set_active(
         await ensure_admin_remains(session, losing_user_id=user.id)
         user.is_active = False
         await session_repo.revoke_all_for_user(session, user.id, utcnow(), "deactivated")
-    else:
+    elif not user.is_active:
         user.is_active = True
+        notifications.account_reactivated(session, user.id)
     audit.record(
         session,
         AuditAction.USER_ACTIVATED if active else AuditAction.USER_DEACTIVATED,
@@ -208,6 +212,12 @@ async def set_roles(
             "added": sorted(r.code for r in added),
             "removed": sorted(r.code for r in removed),
         },
+    )
+    notifications.roles_changed(
+        session,
+        user.id,
+        added=[r.name for r in added],
+        removed=[r.name for r in removed],
     )
     await session.commit()
     return await get_user(session, user.id, reload=True)
