@@ -37,11 +37,11 @@ describe("SidebarNav", () => {
 
   it("does not render links for modules that are not implemented yet", () => {
     render(<SidebarNav />);
-    const assistant = screen.getByTestId("nav-assistant"); // Phase 6
-    expect(assistant.tagName).not.toBe("A");
-    expect(assistant).toHaveAttribute("aria-disabled", "true");
-    expect(assistant).toHaveTextContent("เร็วๆ นี้");
-    for (const key of ["dashboard", "notifications", "system-status"]) {
+    const helpdesk = screen.getByTestId("nav-helpdesk"); // Phase 8
+    expect(helpdesk.tagName).not.toBe("A");
+    expect(helpdesk).toHaveAttribute("aria-disabled", "true");
+    expect(helpdesk).toHaveTextContent("เร็วๆ นี้");
+    for (const key of ["dashboard", "assistant", "notifications", "system-status"]) {
       expect(screen.getByTestId(`nav-${key}`).tagName).toBe("A");
     }
   });
