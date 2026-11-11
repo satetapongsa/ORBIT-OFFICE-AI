@@ -26,6 +26,8 @@ from sqlalchemy.engine import Engine
 os.environ.setdefault("ENVIRONMENT", "test")
 os.environ.setdefault("STORAGE_AUTO_CREATE_BUCKET", "false")
 os.environ["DATABASE_USE_NULL_POOL"] = "true"  # every TestClient runs its own event loop
+# Tests never send real e-mail (Compose points containers at Mailpit); mail tests opt in.
+os.environ["SMTP_HOST"] = ""
 
 _BASE_DB_URL = os.environ.get(
     "DATABASE_URL", "postgresql+psycopg://aura:aura_dev_password@127.0.0.1:5432/aura_office"

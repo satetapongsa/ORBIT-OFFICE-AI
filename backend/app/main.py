@@ -17,7 +17,7 @@ from app.core.errors import register_exception_handlers
 from app.core.event_loop import is_unsupported_windows_loop
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
-from app.core.notifications import LogPasswordResetNotifier
+from app.core.notifications import build_reset_notifier
 from app.core.rate_limit import RedisRateLimiter
 from app.core.redis import close_redis, get_redis
 from app.core.storage import ObjectStorage, get_storage
@@ -75,7 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.rate_limiter = RedisRateLimiter(get_redis())
-    app.state.reset_notifier = LogPasswordResetNotifier(settings)
+    app.state.reset_notifier = build_reset_notifier(settings)
     app.state.document_storage = ObjectStorage(settings)
     app.state.document_processor = CeleryDocumentProcessor()
     app.state.chat_provider = build_chat_provider(settings)

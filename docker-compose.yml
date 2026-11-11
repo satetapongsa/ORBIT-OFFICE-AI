@@ -14,6 +14,11 @@ x-backend-env: &backend-env
   DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aura}:${POSTGRES_PASSWORD:-aura_dev_password}@postgres:5432/${POSTGRES_DB:-aura_office}
   REDIS_URL: redis://redis:6379/0
   STORAGE_ENDPOINT_URL: http://minio:9000
+  # Development mail goes to Mailpit (web UI http://127.0.0.1:8025); set SMTP_CONTAINER_HOST
+  # to use a real server from the containers.
+  SMTP_HOST: ${SMTP_CONTAINER_HOST:-mailpit}
+  SMTP_PORT: ${SMTP_CONTAINER_PORT:-1025}
+  SMTP_STARTTLS: ${SMTP_CONTAINER_STARTTLS:-false}
 
 x-backend: &backend
   build:
@@ -82,6 +87,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    restart: unless-stopped
+
+  mailpit:
+    # Local mail catcher: every e-mail the app sends in development lands here, nothing leaves
+    # the machine. Pinned by digest (tag v1.27).
+    image: ${MAILPIT_IMAGE:-axllent/mailpit@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68}
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
     restart: unless-stopped
 
   migrate:

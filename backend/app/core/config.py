@@ -126,6 +126,15 @@ class Settings(BaseSettings):
     rag_top_k: int = Field(default=8, ge=1, le=50)
     ai_chat_retention_days: int = Field(default=180, ge=1)
 
+    # --- E-mail (Phase 8; disabled while SMTP_HOST is empty) ------------------------
+    smtp_host: str | None = None
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "AURA OFFICE AI <no-reply@aura.example.com>"
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False
+
     # --- Health checks ---------------------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0)
 
