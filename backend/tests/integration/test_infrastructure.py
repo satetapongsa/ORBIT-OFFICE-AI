@@ -7,6 +7,7 @@ Run with the Compose stack up and migrations applied::
 
 from __future__ import annotations
 
+import io
 import os
 import uuid
 
@@ -68,17 +69,18 @@ def test_redis_set_get_round_trip() -> None:
 def test_object_storage_put_get_delete_round_trip() -> None:
     storage = ObjectStorage(Settings())
     storage.ensure_bucket()
-    s3 = storage._client  # upload/download helpers arrive with the Document Center (Phase 4)
     key = f"integration-tests/{uuid.uuid4()}.txt"
-    payload = "เอกสารทดสอบ AURA".encode()
-    s3.put_object(Bucket=storage.bucket, Key=key, Body=payload, ContentType="text/plain")
+    payload = "เอกสารทดสอบ AURA".encode() * 20_000  # several stream chunks
+    storage.put_object(key, io.BytesIO(payload), content_type="text/plain", sha256="x")
     try:
-        fetched = s3.get_object(Bucket=storage.bucket, Key=key)["Body"].read()
-        assert fetched == payload
+        assert b"".join(storage.open_object(key)) == payload
+        buffer = io.BytesIO()
+        storage.download_to(key, buffer)
+        assert buffer.read() == payload
     finally:
-        s3.delete_object(Bucket=storage.bucket, Key=key)
+        storage.delete_object(key)
     with pytest.raises(ClientError):
-        s3.head_object(Bucket=storage.bucket, Key=key)
+        storage.open_object(key)
 
 
 def test_celery_worker_ping_round_trip() -> None:
