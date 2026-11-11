@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -21,10 +22,12 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.identity import _in_check
+from app.models.vector import EMBEDDING_DIMENSIONS, Vector
 
 
 class DocumentVisibility(StrEnum):
@@ -64,6 +67,17 @@ class ProcessingStatus(StrEnum):
     PROCESSING = "PROCESSING"
     READY = "READY"
     FAILED = "FAILED"
+
+
+class IndexStatus(StrEnum):
+    """Search index of a version (Phase 7): chunks for keyword search, plus embeddings when an
+    embedding provider is configured."""
+
+    PENDING = "PENDING"
+    INDEXING = "INDEXING"
+    READY = "READY"
+    FAILED = "FAILED"  # chunks kept for keyword search; embeddings missing
+    SKIPPED = "SKIPPED"  # no text to index (e.g. a scanned PDF)
 
 
 class PrincipalType(StrEnum):
@@ -158,10 +172,20 @@ class DocumentVersion(UUIDPrimaryKeyMixin, Base):
     page_count: Mapped[int | None] = mapped_column(Integer)
     char_count: Mapped[int | None] = mapped_column(Integer)
     processed_at: Mapped[datetime | None] = mapped_column()
+    index_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=IndexStatus.PENDING.value,
+        server_default=IndexStatus.PENDING.value,
+    )
+    index_error: Mapped[str | None] = mapped_column(String(500))
+    indexed_at: Mapped[datetime | None] = mapped_column()
+    chunk_count: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("document_id", "version_number", name="uq_document_versions_number"),
+        CheckConstraint(_in_check("index_status", IndexStatus), name="index_status"),
         CheckConstraint(_in_check("file_type", FileType), name="file_type"),
         CheckConstraint(_in_check("processing_status", ProcessingStatus), name="processing_status"),
         CheckConstraint("size_bytes >= 0", name="size_bytes"),
@@ -183,6 +207,51 @@ class DocumentVersionText(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+
+class DocumentChunk(UUIDPrimaryKeyMixin, Base):
+    """A passage of a version's text for retrieval (RAG).
+
+    The ACL is **not** copied here: every query joins ``documents`` and applies
+    ``accessible_documents_condition``, and only chunks of each document's current version are
+    searchable, so permission changes apply immediately (ADR-006).
+    """
+
+    __tablename__ = "document_chunks"
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    document_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_number: Mapped[int | None] = mapped_column(Integer)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIMENSIONS))
+    embedding_model: Mapped[str | None] = mapped_column(String(200))
+    meta: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("document_version_id", "chunk_index", name="uq_document_chunks_index"),
+        Index("ix_document_chunks_document_id", "document_id"),
+        Index(
+            "ix_document_chunks_embedding",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        Index(
+            "ix_document_chunks_content_trgm",
+            "content",
+            postgresql_using="gin",
+            postgresql_ops={"content": "gin_trgm_ops"},
+        ),
+    )
 
 
 class DocumentAcl(UUIDPrimaryKeyMixin, TimestampMixin, Base):

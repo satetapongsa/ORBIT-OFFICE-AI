@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from app.models.vector import EMBEDDING_DIMENSIONS
+
 DEV_JWT_SECRET_PLACEHOLDER = "change-me-in-production-use-64-random-bytes"  # noqa: S105
 DEV_STORAGE_SECRET_PLACEHOLDER = "aura-minio-dev-secret"  # noqa: S105
 
@@ -153,6 +155,14 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AI_EMBEDDING_PROVIDER=anthropic is not supported: Anthropic has no embeddings "
                 "API. Use openai_compatible (e.g. Ollama) for embeddings."
+            )
+        if (
+            self.ai_embedding_provider is not AIProvider.DISABLED
+            and self.ai_embedding_dimensions != EMBEDDING_DIMENSIONS
+        ):
+            raise ValueError(
+                f"AI_EMBEDDING_DIMENSIONS must be {EMBEDDING_DIMENSIONS} (the vector column size "
+                "fixed by migration 0007); another size needs a new migration and a re-index."
             )
         if self.is_production:
             self._validate_production()

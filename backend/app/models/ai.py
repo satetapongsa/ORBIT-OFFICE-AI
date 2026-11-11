@@ -67,6 +67,8 @@ class ChatMessage(UUIDPrimaryKeyMixin, Base):
     provider_payload: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     provider: Mapped[str | None] = mapped_column(String(50))
     model: Mapped[str | None] = mapped_column(String(200))
+    # Assistant: sources cited in the answer [{n, document_id, version_id, chunk_id, title, page}].
+    citations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     input_tokens: Mapped[int | None] = mapped_column(Integer)
     output_tokens: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
