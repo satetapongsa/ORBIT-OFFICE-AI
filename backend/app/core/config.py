@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from functools import lru_cache
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -47,6 +48,8 @@ class Settings(BaseSettings):
     log_json: bool | None = None  # default: JSON everywhere except development
     api_docs_enabled: bool | None = None  # default: enabled except in production
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    # Business time zone: dashboards group activity by local calendar day in this zone.
+    app_timezone: str = "Asia/Bangkok"
 
     # --- Security / authentication ---------------------------------------------------
     jwt_secret_key: SecretStr = SecretStr(DEV_JWT_SECRET_PLACEHOLDER)
@@ -114,6 +117,15 @@ class Settings(BaseSettings):
 
     # --- Health checks ---------------------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0)
+
+    @field_validator("app_timezone")
+    @classmethod
+    def _check_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"APP_TIMEZONE {value!r} is not a valid IANA time zone") from None
+        return value
 
     @field_validator("cors_origins", mode="before")
     @classmethod
