@@ -270,3 +270,43 @@ to users with `roles:read`.
 the client view; `loading.tsx` provides the static shell (partial prerender `◐`). Calling
 `useParams` in a client component without that shell failed `next build` with a
 "client rendering outside a Suspense boundary" error under Cache Components.
+
+## ADR-033 — Task visibility predicate and capabilities (2026-11-11)
+**Decision.** Like documents (ADR-006/028), task visibility is one SQL predicate
+(`repositories/task_access.visible_tasks_condition`): `tasks:manage_all`, or own/assigned
+(`tasks:read_own`), or same department (`tasks:read_department`/`manage_department`). A task
+belongs to a department (default: the creator's), which is what department managers manage.
+Capabilities (edit, status, cancel, assign, delete, attach) are computed per task and returned
+to the UI; the API enforces them. Invisible tasks answer `404`. Assignees must be in the
+task's department unless the actor holds `tasks:manage_all`, and without `tasks:assign` a user
+can only assign themself (an empty assignee list means "me").
+**Why.** One rule for lists, details, the dashboard and later RAG/AI tools; a manager cannot
+reach into other teams, and employees can still track personal work.
+
+## ADR-034 — HR data in its own table and endpoint (2026-11-11)
+**Decision.** Sensitive HR fields live in `employee_hr_profiles` and are served only by
+`GET/PUT /employees/{id}/hr`; directory/profile responses never contain them. The employee
+can read their own record; others need `employees:read_sensitive`, and each such read is
+audit-logged. Writes need `employees:manage` + `employees:read_sensitive`; the audit log
+keeps changed field names only. Only the last 4 digits of the national ID are stored. The UI
+fetches someone else's record only after an explicit click.
+**Why.** Makes accidental exposure (e.g. a new list query) structurally impossible and keeps
+every access to personal data traceable.
+
+## ADR-035 — Account administration inside the Employee Center (2026-11-11)
+**Decision.** Creating people, editing account fields, assigning roles and suspending
+accounts happen on the Employee Center pages, calling the existing `/users` API (with its
+escalation and last-admin guards); department create/edit (incl. choosing the manager from
+department members) is on the "แผนก" tab. Role/permission editing and system settings stay
+for Phase 8 (`/settings` remains "เร็วๆ นี้").
+**Why.** HR works with people, not raw user records; reusing `/users` avoids a second set of
+rules for the same data.
+
+## ADR-036 — Shared upload helpers and business-day due dates (2026-11-11)
+**Decision.** Upload handling (size while hashing, sniffing, store-then-commit, cleanup) moved
+to `app/services/uploads.py` and is shared by documents and task attachments; the size
+middleware now covers `/documents` and `/tasks`. Due dates are chosen as a calendar day in the
+UI and sent as the end of that day in Bangkok (`23:59+07:00`); the API rejects timestamps
+without a time zone.
+**Why.** One audited pipeline for every file; "due 30 Nov" means the whole business day,
+independent of the browser's time zone.

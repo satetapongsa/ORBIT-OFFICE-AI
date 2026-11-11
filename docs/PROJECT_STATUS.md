@@ -1,6 +1,6 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 4 — Document Center — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 5.
+**Current Phase:** Phase 5 — Task Management & Employee Center — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 6.
 **Last Updated:** 2026-11-11
 
 ## Completed
@@ -137,12 +137,46 @@
   `experimental.proxyClientMaxBodySize: "30mb"`; `/documents/[id]` failed `next build`
   until params were awaited on the server.
 
+### Phase 5 — Task Management & Employee Center
+- **Data model** (migration `0005`): `tasks` (status, priority, due date, owning department,
+  soft delete), `task_assignees`, `task_comments`, `task_attachments`, `task_events`
+  (timeline), `employee_hr_profiles` (sensitive HR data, national ID last 4 digits only),
+  trigram indexes on task titles and user display names, notification type `TASK`.
+- **Task access** (ADR-033): one visibility predicate (`task_access.visible_tasks_condition`)
+  for lists, details and the dashboard; per-task capabilities (edit, status, cancel, assign,
+  delete, attach); department managers manage their department's tasks only; assignees must
+  belong to the task's department unless `tasks:manage_all`; without `tasks:assign` people
+  can only assign themselves; invisible tasks answer 404.
+- **Task API**: list with scopes (all/assigned/created/department), search, status/open/
+  priority/assignee/overdue filters, sorting by due date/priority/updated/created; create,
+  edit, status changes (sets `completed_at`), replace assignees, soft delete; comments
+  (edit own, managers moderate); attachments through the shared upload pipeline (ADR-036,
+  max 20 per task, audited downloads); history; assignable-people lookup. Notifications:
+  assigned, status changed, new comment (never to the actor).
+- **Employee Center API** (ADR-034): directory of active people with work contacts (search,
+  department filter, suspended accounts with `users:read`), profiles with department
+  manager, account section (`users:read`) and capabilities; separate HR record endpoint —
+  self or `employees:read_sensitive` (reads by others audited), writes with
+  `employees:manage` + `employees:read_sensitive` (audit keeps field names only).
+- **Dashboard**: `tasks` section (open assigned, overdue, due within 7 days, 5 earliest due).
+- **Frontend**: `/tasks` (scope tabs, filters, overdue toggle, create dialog with assignee
+  picker for people with `tasks:assign`), `/tasks/[id]` (status control, edit, delete,
+  assignees dialog, comments, attachments with upload/download/delete, history);
+  `/employees` (directory cards, department tab with member counts and department
+  create/edit + manager choice for `departments:manage`, "เพิ่มพนักงาน" for `users:create`),
+  `/employees/[id]` (work contacts, account card with edit/roles/suspend by capability, HR
+  card loaded on demand with edit dialog); dashboard "งานของฉัน" card; `TASK` notifications;
+  activity feeds label document/task/HR events; nav `CURRENT_PHASE = 5` (account
+  administration lives in the Employee Center, ADR-035; `/settings` moved to Phase 8).
+- **Fixes found while verifying**: avatar initials showed Thai leading vowels ("ไเ" →
+  "อท"); activity feeds showed raw `document.*` codes (labels added).
+
 ## In Progress
-- Nothing. Phase 4 is complete.
+- Nothing. Phase 5 is complete.
 
 ## Remaining
-- Phases 5–9 per `docs/DEVELOPMENT_PHASES.md`.
-- User/role administration UI (APIs done) — planned with the Employee Center (Phase 5).
+- Phases 6–9 per `docs/DEVELOPMENT_PHASES.md`.
+- Role/permission editing UI and system settings (`/settings`) — Phase 8 (APIs exist).
 - E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
 
 ## Technical Decisions
@@ -157,9 +191,41 @@ session gate (ADR-021); notification inbox in Phase 3 (ADR-023); permission-gate
 summary (ADR-024); business time zone (ADR-025); charts without a library (ADR-026);
 dashboard as home page (ADR-027); document capabilities = ACL level × permissions (ADR-028);
 upload pipeline with content sniffing and store-then-commit (ADR-029); text extraction in the
-worker (ADR-030); directory lookup for sharing (ADR-031); dynamic route pattern (ADR-032).
+worker (ADR-030); directory lookup for sharing (ADR-031); dynamic route pattern (ADR-032);
+task visibility predicate + capabilities (ADR-033); HR data in its own audited endpoint
+(ADR-034); account administration in the Employee Center (ADR-035); shared upload helpers and
+business-day due dates (ADR-036).
 
 ## Tests
+### Phase 5 verification — 2026-11-11
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (97 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **191 passed**, 1 skipped (Windows-only event-loop test) |
+| — `tests/api/test_tasks.py` | ✅ 22: 401/403 guards, personal task (self-assigned, own department, events, audit, no self-notification), employees cannot assign others or create in another department, managers assign within their department only (422 cross-department/unknown/inactive), replace assignees (notifications, access removed), visibility matrix for 6 users, 404 on every sub-resource for invisible tasks, department scope needs permission, assignee capabilities (status yes; edit/cancel/delete no), manager edit + `manage_all` department move + delete, clearing fields and no-op updates, time zone required, scopes/filters/search (`%` literal)/sorting/pagination/overdue, assignable-people scoping, comments (notifications, authorship, moderation, length), attachments (store, download headers + audit, spoofed file rejected, outsider 404, delete removes object), storage failure leaves no row, 413 before reading, dashboard task summary |
+| — `tests/api/test_employees.py` | ✅ 6: directory permission + active-only + work fields only + search/department filter + suspended accounts need `users:read`, profile sections and capabilities per role, inactive profiles hidden, HR record (self read, others 403 for EMPLOYEE/MANAGER/IT, writes HR only, audit of reads, audit without values, full replacement), HR validation (no full national ID) |
+| — `tests/api/test_dashboard.py` | ✅ section matrix now includes `tasks` |
+| `alembic upgrade head` / `alembic check` / `downgrade 0004` + `upgrade` (test DB) | ✅ `0005 (head)`, no drift, round trip ok |
+| Frontend `vitest` | ✅ **60 passed** (new: task list scopes/filters, create validation + self-assignment, assignee picker, detail capabilities, plain-text comments, not-found state, due-date conversion; directory/departments, HR record on demand + validation, Thai initials; dashboard tasks card) |
+| Frontend lint, typecheck, Prettier, `next build` | ✅ (`/tasks`, `/employees` prerendered; `/tasks/[id]`, `/employees/[id]` partial prerender) |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Browser (Docker stack, dev accounts) | ✅ manager: department tab visible, assignee picker lists only SALES people, created an overdue HIGH task for the employee, attached a Thai-named TXT, commented, downloaded (200); employee: two `TASK` notifications + "งานของฉัน" card (1 open, 1 overdue), task page without edit/delete/assign/cancel, status → รอตรวจสอบ recorded in history; employee directory shows work contacts only, `GET /employees/{manager}/hr` 403, own HR 200, `include_inactive` 403; HR: account card with edit only (no roles/suspend), HR card hidden until clicked, record saved (ID shown as `•••• •••• 4321`); audit log has `employee.hr_profile_viewed` and `employee.hr_profile_updated` with field names only; HR opening the SALES task gets "ไม่พบงาน"; 375 px: no horizontal overflow on `/tasks`, `/tasks/[id]`, `/employees`, `/employees/[id]`, `/dashboard`; console: only the expected 401/403/404 from logouts and permission probes |
+
+Note: the migration round trip was first run against the **dev** database by mistake, which
+dropped the browser-verification data in the Phase 5 tables (one task with its comment,
+attachment row and history, one HR record, the `TASK` notifications). Audit entries and all
+Phase 0–4 data were unaffected; the attachment object remains orphaned in MinIO
+(`tasks/fb07d098-…`). RUNBOOK §5 now shows how to run round trips on the test database.
+
+### Phase 5 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Employees see their permitted tasks; managers manage authorized team tasks | ✅ visibility matrix + capability tests, browser (manager vs employee vs HR) |
+| Task changes persist; permission boundaries enforced | ✅ API tests (status, assignees, comments, attachments, delete), browser |
+| Employee information protected | ✅ HR record endpoint tests (403/audit/no values), directory field tests, browser probes |
+| Tests cover task and employee permissions | ✅ 28 new backend API tests, 15 new frontend tests |
+
 ### Phase 4 verification — 2026-11-11
 | Check (command) | Result |
 | --- | --- |
@@ -332,9 +398,15 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 16. The Celery worker does not auto-reload; restart it after backend changes
     (`docker compose restart worker`).
 17. Document search is `ILIKE` on title/description; content search arrives with RAG (Phase 7).
+18. Task attachments accept the document formats only (PDF, DOCX, XLSX, TXT) — no images yet.
+19. Objects of removed task attachments are deleted after the DB commit; a storage failure at
+    that moment leaves an orphaned object (logged). Purge job: Phase 9.
+20. Notifications for tasks are in-app only; there are no due-date reminders yet (Phase 8).
+21. Role/permission editing and `/settings` are not built yet (Phase 8); roles are assigned
+    from the Employee Center.
 
 ## Next Phase
-**Phase 5 — Task Management & Employee Center**: see `docs/DEVELOPMENT_PHASES.md`.
+**Phase 6 — AI Assistant & Tool Calling**: see `docs/DEVELOPMENT_PHASES.md`.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -347,7 +419,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 5 — TASK MANAGEMENT & EMPLOYEE CENTER as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 6 — AI ASSISTANT & TOOL CALLING as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)

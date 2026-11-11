@@ -91,17 +91,25 @@ Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
 - [x] Document processing status is visible.
 - [x] Tests cover upload, access control and processing errors.
 
-## Phase 5 — Task management & Employee Center ⬜
+## Phase 5 — Task management & Employee Center ✅
 
 Tasks (create, assign, status, due dates, priority, comments, attachments,
 history, search/filter); employee directory, department views, profiles,
 role-aware access to sensitive HR data.
 
-Acceptance criteria
-- Employees see their permitted tasks; managers manage authorized team tasks.
-- Task changes persist; permission boundaries enforced.
-- Employee information protected.
-- Tests cover task and employee permissions.
+Delivered: migration `0005`, `/tasks` API (visibility predicate + capabilities, ADR-033),
+`/employees` API with a separate audited HR record (ADR-034), `/tasks`, `/tasks/[id]`,
+`/employees`, `/employees/[id]` pages, account administration (create/edit/roles/suspend)
+and department management from the Employee Center (ADR-035), dashboard "งานของฉัน" card,
+`TASK` notifications.
+
+Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
+- [x] Employees see their permitted tasks; managers manage authorized team tasks.
+- [x] Task changes persist; permission boundaries enforced.
+- [x] Employee information protected.
+- [x] Tests cover task and employee permissions.
+
+Deferred: role/permission editing UI and system settings (`/settings`) → Phase 8.
 
 ## Phase 6 — AI assistant & tool calling ⬜
 
