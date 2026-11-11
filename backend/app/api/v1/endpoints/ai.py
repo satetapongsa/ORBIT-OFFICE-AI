@@ -105,7 +105,8 @@ async def send_message(
             get_async_session_factory(), settings, provider, user, meta, session_id, body.content
         ),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        # no-transform stops proxies (Next.js, Nginx) from compressing and buffering the stream.
+        headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"},
     )
 
 

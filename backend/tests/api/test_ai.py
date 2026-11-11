@@ -37,6 +37,8 @@ def send(client: TestClient, session_id: str, content: str) -> list[tuple[str, d
     response = client.post(f"{BASE}/sessions/{session_id}/messages", json={"content": content})
     assert response.status_code == 200, response.text
     assert response.headers["content-type"].startswith("text/event-stream")
+    # Proxies must not compress (and so buffer) the stream.
+    assert "no-transform" in response.headers["cache-control"]
     return events(response.text)
 
 
@@ -340,6 +342,7 @@ def test_create_task_only_after_confirmation(
     send(client, session_id, "สร้างแล้วใช่ไหม")
     notes = [m.content for m in provider.requests[-1]["messages"] if m.role == "system"]
     assert len(notes) == 1 and "ดำเนินการสำเร็จ" in notes[0]
+    assert notes[0].endswith(body["result"]["link"])  # readable, no raw JSON
     detail = client.get(f"{BASE}/sessions/{session_id}").json()
     assert detail["actions"][0]["status"] == "EXECUTED"
 
