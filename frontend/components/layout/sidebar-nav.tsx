@@ -4,12 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
+import { useSession } from "@/features/auth/hooks/use-session";
 import { cn } from "@/lib/utils";
 import {
   MAIN_NAV,
   SECONDARY_NAV,
   isNavItemActive,
   isNavItemAvailable,
+  isNavItemPermitted,
   type NavItem,
 } from "@/lib/navigation";
 
@@ -70,19 +72,23 @@ function NavEntry({
 
 export function SidebarNav({ onNavigate }: SidebarNavProps) {
   const pathname = usePathname() ?? "/";
+  const { has } = useSession();
+  // Cosmetic only: the backend independently rejects requests the user is not allowed to make.
+  const main = MAIN_NAV.filter((item) => isNavItemPermitted(item, has));
+  const secondary = SECONDARY_NAV.filter((item) => isNavItemPermitted(item, has));
   return (
     <nav aria-label="เมนูหลัก" className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground px-3 pb-1 text-xs font-medium tracking-wide">
           เมนูหลัก
         </p>
-        {MAIN_NAV.map((item) => (
+        {main.map((item) => (
           <NavEntry key={item.key} item={item} pathname={pathname} onNavigate={onNavigate} />
         ))}
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground px-3 pb-1 text-xs font-medium tracking-wide">ระบบ</p>
-        {SECONDARY_NAV.map((item) => (
+        {secondary.map((item) => (
           <NavEntry key={item.key} item={item} pathname={pathname} onNavigate={onNavigate} />
         ))}
       </div>

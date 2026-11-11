@@ -28,7 +28,7 @@ export interface NavItem {
 }
 
 /** Development phase that is currently implemented (see docs/PROJECT_STATUS.md). */
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;
 
 export const MAIN_NAV: NavItem[] = [
   {
@@ -112,9 +112,15 @@ export const SECONDARY_NAV: NavItem[] = [
     href: "/settings",
     icon: Settings,
     permission: "system:configure",
-    phase: 2,
+    // The user/role administration UI ships with the Employee Center (Phase 5).
+    phase: 5,
   },
 ];
+
+/** Items the user may see: no permission required, or the user holds it. */
+export function isNavItemPermitted(item: NavItem, has: (permission: string) => boolean): boolean {
+  return item.permission === null || has(item.permission);
+}
 
 export function isNavItemAvailable(item: NavItem, currentPhase: number = CURRENT_PHASE): boolean {
   return item.phase <= currentPhase;
