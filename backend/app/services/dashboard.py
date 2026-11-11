@@ -38,6 +38,7 @@ from app.schemas.dashboard import (
     MyActivity,
     NotificationSummary,
     OrganizationSummary,
+    RecentDocument,
     SecuritySummary,
 )
 from app.schemas.identity import DepartmentRef, RoleRef
@@ -47,6 +48,7 @@ from app.services.audit import AuditAction
 PERIOD_DAYS = 14
 RECENT_LIMIT = 8
 NOTIFICATION_PREVIEW = 5
+RECENT_DOCUMENTS = 5
 
 
 def _period(now: datetime, tz: str) -> tuple[list[date], datetime]:
@@ -134,8 +136,25 @@ async def build_summary(
     )
 
     if user.has(P.DOCUMENTS_READ):
+        owned, in_progress, broken = await dashboard_repo.my_document_counts(session, user.id)
         summary.documents = DocumentSummary(
-            accessible_count=await dashboard_repo.count_accessible_documents(session, user)
+            accessible_count=await dashboard_repo.count_accessible_documents(session, user),
+            my_documents=owned,
+            my_processing=in_progress,
+            my_failed=broken,
+            recent=[
+                RecentDocument(
+                    id=doc.id,
+                    title=doc.title,
+                    category=doc.category,
+                    file_type=version.file_type if version else None,
+                    processing_status=version.processing_status if version else None,
+                    updated_at=doc.updated_at,
+                )
+                for doc, version in await dashboard_repo.recent_documents(
+                    session, user, limit=RECENT_DOCUMENTS
+                )
+            ],
         )
 
     if user.has(P.USERS_READ):

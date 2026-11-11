@@ -17,7 +17,7 @@ from sqlalchemy.orm import aliased
 from app.core.principal import CurrentUser
 from app.models.audit import AuditLog
 from app.models.auth import UserSession
-from app.models.document import Document
+from app.models.document import Document, DocumentVersion
 from app.models.identity import Department, User
 from app.repositories.document_access import accessible_documents_condition
 
@@ -140,3 +140,33 @@ async def count_accessible_documents(session: AsyncSession, user: CurrentUser) -
     """Uses the single document access predicate — never re-implement ACL rules here."""
     stmt = select(func.count(Document.id)).where(accessible_documents_condition(user))
     return await session.scalar(stmt) or 0
+
+
+async def my_document_counts(session: AsyncSession, user_id: uuid.UUID) -> tuple[int, int, int]:
+    """(owned, current file pending/processing, current file failed) for live documents."""
+    status = DocumentVersion.processing_status
+    stmt = (
+        select(
+            func.count(Document.id),
+            func.count(Document.id).filter(status.in_(["PENDING", "PROCESSING"])),
+            func.count(Document.id).filter(status == "FAILED"),
+        )
+        .select_from(Document)
+        .outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id)
+        .where(Document.owner_id == user_id, Document.deleted_at.is_(None))
+    )
+    row = (await session.execute(stmt)).one()
+    return int(row[0]), int(row[1]), int(row[2])
+
+
+async def recent_documents(
+    session: AsyncSession, user: CurrentUser, *, limit: int
+) -> list[tuple[Document, DocumentVersion | None]]:
+    stmt = (
+        select(Document, DocumentVersion)
+        .outerjoin(DocumentVersion, DocumentVersion.id == Document.current_version_id)
+        .where(accessible_documents_condition(user))
+        .order_by(Document.updated_at.desc(), Document.id.desc())
+        .limit(limit)
+    )
+    return [(r[0], r[1]) for r in await session.execute(stmt)]

@@ -54,8 +54,23 @@ class MyActivity(BaseModel):
     recent: list[ActivityItem]
 
 
+class RecentDocument(BaseModel):
+    id: uuid.UUID
+    title: str
+    category: str
+    file_type: str | None
+    processing_status: str | None
+    updated_at: datetime
+
+
 class DocumentSummary(BaseModel):
     accessible_count: int = Field(ge=0, description="Documents this user may view (ACL-filtered).")
+    my_documents: int = Field(ge=0, description="Live documents the user owns.")
+    my_processing: int = Field(
+        ge=0, description="My documents whose current file is queued/processing."
+    )
+    my_failed: int = Field(ge=0, description="My documents whose current file failed processing.")
+    recent: list[RecentDocument] = Field(description="Latest updated documents the user may view.")
 
 
 class DepartmentHeadcount(BaseModel):
