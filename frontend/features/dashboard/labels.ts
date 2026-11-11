@@ -20,6 +20,23 @@ const ACTION_LABELS: Record<string, string> = {
   "department.created": "สร้างแผนก",
   "department.updated": "แก้ไขแผนก",
   "department.deleted": "ลบแผนก",
+  "document.uploaded": "อัปโหลดเอกสาร",
+  "document.version_uploaded": "อัปโหลดเอกสารฉบับใหม่",
+  "document.updated": "แก้ไขข้อมูลเอกสาร",
+  "document.deleted": "ลบเอกสาร",
+  "document.downloaded": "ดาวน์โหลดเอกสาร",
+  "document.acl_changed": "เปลี่ยนสิทธิ์การเข้าถึงเอกสาร",
+  "document.reprocess_requested": "สั่งประมวลผลเอกสารใหม่",
+  "task.created": "สร้างงาน",
+  "task.updated": "แก้ไขงาน",
+  "task.status_changed": "เปลี่ยนสถานะงาน",
+  "task.assignees_changed": "เปลี่ยนผู้รับผิดชอบงาน",
+  "task.deleted": "ลบงาน",
+  "task.attachment_added": "แนบไฟล์ในงาน",
+  "task.attachment_removed": "ลบไฟล์แนบของงาน",
+  "task.attachment_downloaded": "ดาวน์โหลดไฟล์แนบของงาน",
+  "employee.hr_profile_viewed": "เปิดดูข้อมูลบุคคล",
+  "employee.hr_profile_updated": "แก้ไขข้อมูลบุคคล",
 };
 
 /** Actions that deserve attention in a security feed. */
