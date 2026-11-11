@@ -1,1 +1,1 @@
-"""Task management services (Phase 5)."""
+"""Task management."""

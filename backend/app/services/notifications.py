@@ -190,6 +190,73 @@ def document_shared(
     )
 
 
+def _task_link(task_id: uuid.UUID) -> str:
+    return f"/tasks/{task_id}"
+
+
+def task_assigned(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    task_id: uuid.UUID,
+    title: str,
+    assigned_by: str,
+) -> None:
+    notify(
+        session,
+        user_id=user_id,
+        type=NotificationType.TASK,
+        title=f"คุณได้รับมอบหมายงาน: {title}",
+        body=f"{assigned_by} มอบหมายงานนี้ให้คุณ",
+        link_url=_task_link(task_id),
+        entity_type="task",
+        entity_id=task_id,
+    )
+
+
+def task_status_changed(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    task_id: uuid.UUID,
+    title: str,
+    status_label: str,
+    changed_by: str,
+) -> None:
+    notify(
+        session,
+        user_id=user_id,
+        type=NotificationType.TASK,
+        title=f"งาน{status_label}: {title}",
+        body=f"{changed_by} เปลี่ยนสถานะเป็น {status_label}",
+        link_url=_task_link(task_id),
+        entity_type="task",
+        entity_id=task_id,
+    )
+
+
+def task_commented(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    task_id: uuid.UUID,
+    title: str,
+    author: str,
+    excerpt: str,
+) -> None:
+    short = excerpt if len(excerpt) <= 140 else excerpt[:139] + "…"
+    notify(
+        session,
+        user_id=user_id,
+        type=NotificationType.TASK,
+        title=f"ความคิดเห็นใหม่ในงาน: {title}",
+        body=f"{author}: {short}",
+        link_url=_task_link(task_id),
+        entity_type="task",
+        entity_id=task_id,
+    )
+
+
 # --- Reader operations -------------------------------------------------------------------
 
 

@@ -43,6 +43,16 @@ class AuditAction(StrEnum):
     DOCUMENT_DOWNLOADED = "document.downloaded"
     DOCUMENT_ACL_CHANGED = "document.acl_changed"
     DOCUMENT_REPROCESS_REQUESTED = "document.reprocess_requested"
+    TASK_CREATED = "task.created"
+    TASK_UPDATED = "task.updated"
+    TASK_STATUS_CHANGED = "task.status_changed"
+    TASK_ASSIGNEES_CHANGED = "task.assignees_changed"
+    TASK_DELETED = "task.deleted"
+    TASK_ATTACHMENT_ADDED = "task.attachment_added"
+    TASK_ATTACHMENT_REMOVED = "task.attachment_removed"
+    TASK_ATTACHMENT_DOWNLOADED = "task.attachment_downloaded"
+    EMPLOYEE_HR_PROFILE_VIEWED = "employee.hr_profile_viewed"
+    EMPLOYEE_HR_PROFILE_UPDATED = "employee.hr_profile_updated"
 
 
 def record(
