@@ -41,7 +41,7 @@ database. New roles can be created without code changes (see `SECURITY.md`).
 | 5 | Employee Center      | ศูนย์พนักงาน               | Phase 5      |
 | 6 | IT Helpdesk          | แจ้งปัญหาไอที              | Phase 8      |
 | 7 | Analytics & Reports  | รายงานและการวิเคราะห์       | Phase 8      |
-| 8 | Notifications        | การแจ้งเตือน               | Phase 8      |
+| 8 | Notifications        | การแจ้งเตือน               | Phase 3 (inbox), 8 |
 | 9 | Settings             | ตั้งค่า                    | Phase 2+     |
 
 ## Non-negotiable product rules

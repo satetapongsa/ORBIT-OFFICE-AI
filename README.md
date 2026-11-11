@@ -25,7 +25,7 @@ docker compose up --build -d
 docker compose exec backend python -m app.cli seed-dev   # development accounts
 ```
 
-- App: http://127.0.0.1:3000 — sign in as `admin@aura.example.com` (or `manager@`, `hr@`,
+- App: http://127.0.0.1:3000 (opens the dashboard) — sign in as `admin@aura.example.com` (or `manager@`, `hr@`,
   `it@`, `employee@`) with `SEED_DEV_PASSWORD` from `.env`
 - API docs: http://127.0.0.1:8000/api/docs
 - Readiness: http://127.0.0.1:8000/api/v1/health

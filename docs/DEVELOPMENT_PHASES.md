@@ -57,18 +57,22 @@ Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
 Deferred by design: the user/role administration **UI** ships with the Employee Center
 (Phase 5); the APIs exist now. E-mail delivery of reset links needs a mail provider.
 
-## Phase 3 — Dashboard & application UI ⬜
+## Phase 3 — Dashboard & application UI ✅
 
 Main layout, sidebar, header, user profile menu, dashboard with summary cards,
 charts, recent activity, notification preview; responsive navigation; loading,
 error and empty states; role-aware menus. Dashboard metrics from real APIs,
 scoped to the user's permissions.
 
-Acceptance criteria
-- Authenticated users can access the dashboard.
-- Dashboard metrics are returned by the backend.
-- Users see only authorized information.
-- Navigation works; responsive layouts work.
+Delivered: `GET /dashboard/summary` (permission-gated sections), the `notifications` table +
+inbox API fed by real account/security events (ADR-023), dashboard page, header notification
+bell, `/notifications` page, `/` → `/dashboard`, system status moved to `/system-status`.
+
+Acceptance criteria (verified 2026-11-11 — see `PROJECT_STATUS.md`)
+- [x] Authenticated users can access the dashboard.
+- [x] Dashboard metrics are returned by the backend.
+- [x] Users see only authorized information.
+- [x] Navigation works; responsive layouts work.
 
 ## Phase 4 — Document Center ⬜
 
@@ -126,7 +130,7 @@ Acceptance criteria
 ## Phase 8 — Helpdesk, notifications & analytics ⬜
 
 IT tickets (create, assign, status, public/internal comments, history),
-notification system with read status, analytics APIs, reports, PDF and Excel
+task/ticket/document notifications on top of the Phase 3 inbox (preferences, e-mail), analytics APIs, reports, PDF and Excel
 export, AI report summaries.
 
 Acceptance criteria

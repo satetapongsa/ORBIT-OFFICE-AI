@@ -1,6 +1,6 @@
 # AURA OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 2 — Authentication & Authorization — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 3.
+**Current Phase:** Phase 3 — Dashboard & Application UI — ✅ **COMPLETE** (verified 2026-11-11). Next: Phase 4.
 **Last Updated:** 2026-11-11
 
 ## Completed
@@ -73,11 +73,38 @@
   `.local` e-mail domains rejected by the validator → `example.com` (ADR-022); refresh with no
   session now answers 401 instead of a CSRF 403, and the client skips that call.
 
+### Phase 3 — Dashboard & Application UI
+- **Notifications** (migration `0003`, ADR-023): `notifications` table (owner-only, relative
+  links enforced by a DB `CHECK`); producers in the same transaction as the event — welcome
+  (account created / dev seed), password changed, password reset, refresh-token reuse
+  detected, roles changed (role names), account updated by someone else (field names),
+  account re-activated. API: `GET /notifications` (+`unread_only`, `unread_count`),
+  `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`.
+- **Dashboard API** (ADR-024): `GET /dashboard/summary` — account (department, roles,
+  previous sign-in, password changed, active sessions), notifications (unread + latest 5),
+  my activity (14-day sign-ins, latest events by me or on my account); `documents`
+  (`documents:read`, counted through `accessible_documents_condition`), `organization`
+  (`users:read`: active/inactive users, departments, active headcount per department),
+  `security` (`audit:read`: sign-ins / failures / rate limits per day, latest audit events).
+  Sections without permission are `null`; activity items never include IP, user agent or metadata.
+- **Business time zone** `APP_TIMEZONE` (default `Asia/Bangkok`, ADR-025) + `tzdata` dependency.
+- **Frontend**: `/dashboard` (greeting, stat cards, "my sign-ins" chart, account & security
+  card, notification preview, account activity; organisation and system-security sections
+  only when returned), loading skeleton, error state with retry and request id, empty states;
+  accessible HTML/CSS column chart with tooltip, legend, table view and a CVD-checked palette
+  (ADR-026); header notification bell (unread badge polled every 60 s, latest 5, mark all
+  read); `/notifications` page (all/unread filter, mark one/all read, pagination, empty
+  state); `/` → `/dashboard`, system status moved to `/system-status`, login lands on the
+  dashboard (ADR-027); 2-column stat cards on phones; nav: dashboard + notifications enabled
+  (`CURRENT_PHASE = 3`).
+- **Fixes found while verifying**: new pages under `app/(app)` need their own
+  `instant = false`; the smoke test follows the new `/` redirect.
+
 ## In Progress
-- Nothing. Phase 2 is complete.
+- Nothing. Phase 3 is complete.
 
 ## Remaining
-- Phases 3–9 per `docs/DEVELOPMENT_PHASES.md`.
+- Phases 4–9 per `docs/DEVELOPMENT_PHASES.md`.
 - User/role administration UI (APIs done) — planned with the Employee Center (Phase 5).
 - E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
 
@@ -89,9 +116,35 @@ S3-generic storage code (ADR-009) with digest-pinned `pgsty/minio` (ADR-013); se
 loop on native Windows (ADR-014); `127.0.0.1` host defaults (ADR-015); session model with
 rotating refresh-token families (ADR-016); CSRF double-submit (ADR-017); grant-only-what-you-hold
 (ADR-018); ACL foundation in Phase 2 (ADR-019); isolated test database (ADR-020); client-side
-session gate (ADR-021).
+session gate (ADR-021); notification inbox in Phase 3 (ADR-023); permission-gated dashboard
+summary (ADR-024); business time zone (ADR-025); charts without a library (ADR-026);
+dashboard as home page (ADR-027).
 
 ## Tests
+### Phase 3 verification — 2026-11-11
+Backend checks ran inside the backend container (Python 3.13), as in Phase 2.
+
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (75 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **113 passed**, 1 skipped (Windows-only event-loop test) |
+| — `tests/api/test_dashboard.py` | ✅ 15: 401 unauthenticated, section matrix for all 5 roles + a user with no roles, active sessions + previous sign-in + logout, own-activity isolation, changes by others on my account, ACL-scoped document count (department/private/admin override), organisation counts (inactive users, soft-deleted department), security counts (failed sign-ins), Bangkok-day grouping, period boundaries |
+| — `tests/api/test_notifications.py` | ✅ 16: 401 on all endpoints, newest-first + unread filter + pagination, isolation (admin cannot read/mark another user's notification), mark one/all (idempotent), CSRF required, password-change and admin-change producers (actor not notified), DB rejects external links, service rejects non-relative links |
+| `alembic upgrade head` / `alembic check` / `downgrade 0002` + `upgrade` | ✅ `0003 (head)`, no drift, round trip ok |
+| Frontend `vitest` | ✅ **34 passed** (new: dashboard sections/errors/retry, chart tooltip/legend/table/gridlines, notifications list/filter/mark-all with CSRF/empty/unsafe links, bell badge) |
+| Frontend lint, typecheck, Prettier, `next build` | ✅ (`/dashboard`, `/notifications`, `/system-status`, `/account` prerendered) |
+| `bash scripts/smoke-test.sh` | ✅ passed (follows `/` → `/dashboard`) |
+| Browser (Docker stack, in-app browser) | ✅ admin: all three optional sections with real counts (5 users, 5 departments, sign-ins/failures from the audit log); admin edit of the employee created a real notification; logout → `/login?next=%2Fdashboard` → employee sign-in → dashboard without organisation/security sections, notification preview shows the change, bell badge 1 → "อ่านทั้งหมด" → `POST /notifications/read-all` 200, badge gone, unread card 0; employee nav has no "ตั้งค่า"; 375 px: no horizontal overflow on `/dashboard` and `/notifications`; console clean after the `instant` fix |
+
+### Phase 3 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Authenticated users can access the dashboard | ✅ browser (admin + employee); `/` and login land on it |
+| Dashboard metrics are returned by the backend | ✅ `GET /dashboard/summary`, real DB aggregates (tests) |
+| Users see only authorized information | ✅ section matrix per role, ACL-scoped documents, own-only activity and notifications (tests + browser) |
+| Navigation works; responsive layouts work | ✅ nav tests, mobile drawer, 375 px checks, 2-column cards on phones |
+
 ### Phase 2 verification — 2026-11-11
 Backend checks ran **inside the backend container** (Python 3.13) because Windows Application
 Control now blocks the host venv's compiled wheels (see Known Issues).
@@ -204,11 +257,18 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
    authorised by the backend. Server-side gating can be added with `proxy.ts` later (ADR-021).
 8. Next.js dev server writes `frontend/AGENTS.md`; ignored by the global git excludes.
 9. The `worker` container lists `8000/tcp` (inherited `EXPOSE`); cosmetic.
+10. The Docker frontend dev server (Turbopack) did not pick up host edits despite
+    `WATCHPACK_POLLING`; `docker compose restart frontend` applies them (RUNBOOK §6).
+11. Dashboard aggregates are computed per request without caching (fine at current scale;
+    revisit with analytics in Phase 8). Dark mode is not wired (no theme provider), so only
+    the light chart palette is in use.
+12. Notifications are in-app only (no e-mail) and have no per-user preferences yet (Phase 8).
 
 ## Next Phase
-**Phase 3 — Dashboard & Application UI**: dashboard with summary cards, charts, recent
-activity and notification preview from real, permission-scoped APIs; role-aware menus;
-loading/error/empty states; responsive navigation.
+**Phase 4 — Document Center**: upload/download/list/search/filter, categories, metadata,
+versions, ACL management UI, MinIO storage, file validation (type sniffing, size), async text
+extraction (PDF, DOCX, XLSX, TXT), processing status, document audit history — every read
+path through `accessible_documents_condition`.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -221,7 +281,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 3 — DASHBOARD & APPLICATION UI as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 4 — DOCUMENT CENTER as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)
