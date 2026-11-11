@@ -133,7 +133,9 @@ async function send(
   signal: AbortSignal | undefined,
 ): Promise<Response> {
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const isForm = typeof FormData !== "undefined" && body instanceof FormData;
+  // FormData sets its own multipart boundary header.
+  if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
   if (!SAFE_METHODS.has(method)) {
     const csrf = readCookie(CSRF_COOKIE);
     if (csrf) headers[CSRF_HEADER] = csrf;
@@ -142,7 +144,7 @@ async function send(
     return await fetch(buildUrl(path, query), {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       credentials: "same-origin",
       cache: "no-store",
       signal,
@@ -151,6 +153,100 @@ async function send(
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError({ status: 0, code: "network_error", message: NETWORK_ERROR_MESSAGE });
   }
+}
+
+async function sendWithRefresh(
+  path: string,
+  method: HttpMethod,
+  body: unknown,
+  query: ApiRequestOptions<z.ZodType>["query"],
+  signal: AbortSignal | undefined,
+): Promise<Response> {
+  let response = await send(path, method, body, query, signal);
+  const mayRefresh = !NO_REFRESH_PATHS.some((p) => path.startsWith(p));
+  if (response.status === 401 && mayRefresh) {
+    if (await refreshSession()) {
+      response = await send(path, method, body, query, signal);
+    }
+    if (response.status === 401) sessionExpiredListeners.forEach((listener) => listener());
+  }
+  return response;
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const requestId = response.headers.get("X-Request-ID");
+  const payload = await readJson(response);
+  const envelope = errorResponseSchema.safeParse(payload);
+  if (envelope.success) {
+    const { code, message, details, request_id } = envelope.data.error;
+    return new ApiError({
+      status: response.status,
+      code,
+      message,
+      details,
+      requestId: request_id ?? requestId,
+      body: payload,
+    });
+  }
+  return new ApiError({
+    status: response.status,
+    code: response.status >= 500 ? "service_unavailable" : "error",
+    message: GENERIC_ERROR_MESSAGE,
+    requestId,
+    body: payload,
+  });
+}
+
+/** Filename from `Content-Disposition` (prefers the RFC 5987 UTF-8 form). */
+export function filenameFromDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1]);
+    } catch {
+      /* fall through */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain?.[1] ?? fallback;
+}
+
+/**
+ * Download a file through the API (session cookies, refresh-and-retry, error envelope) and
+ * hand it to the browser as a file save.
+ */
+export async function apiDownload(
+  path: string,
+  options: { query?: ApiRequestOptions<z.ZodType>["query"]; fallbackName?: string } = {},
+): Promise<string> {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const response = await sendWithRefresh(
+    normalizedPath,
+    "GET",
+    undefined,
+    options.query,
+    undefined,
+  );
+  if (!response.ok) throw await toApiError(response);
+  const name = filenameFromDisposition(
+    response.headers.get("Content-Disposition"),
+    options.fallbackName ?? "document",
+  );
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = name;
+    link.rel = "noopener";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+  return name;
 }
 
 /**
@@ -167,15 +263,7 @@ export async function apiRequest<TSchema extends z.ZodType>(
   const { method = "GET", schema, body, query, signal, acceptStatuses = [] } = options;
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 
-  let response = await send(normalizedPath, method, body, query, signal);
-  const mayRefresh = !NO_REFRESH_PATHS.some((p) => normalizedPath.startsWith(p));
-  if (response.status === 401 && mayRefresh) {
-    if (await refreshSession()) {
-      response = await send(normalizedPath, method, body, query, signal);
-    }
-    if (response.status === 401) sessionExpiredListeners.forEach((listener) => listener());
-  }
-
+  const response = await sendWithRefresh(normalizedPath, method, body, query, signal);
   const requestId = response.headers.get("X-Request-ID");
   const payload = await readJson(response);
 
