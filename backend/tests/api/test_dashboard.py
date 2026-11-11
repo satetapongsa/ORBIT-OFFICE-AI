@@ -125,11 +125,11 @@ def test_document_count_uses_the_access_predicate(db: Factory, as_user: AsUser) 
     _doc(db, owner, hr, "PRIVATE")  # owner only
 
     employee = as_user(["EMPLOYEE"], department_id=sales)
-    assert _summary(employee)["documents"] == {"accessible_count": 1}
+    assert _summary(employee)["documents"]["accessible_count"] == 1
     colleague = as_user(["EMPLOYEE"], department_id=hr)
-    assert _summary(colleague)["documents"] == {"accessible_count": 2}
+    assert _summary(colleague)["documents"]["accessible_count"] == 2
     admin = as_user(["ADMIN"])  # documents:manage override
-    assert _summary(admin)["documents"] == {"accessible_count": 3}
+    assert _summary(admin)["documents"]["accessible_count"] == 3
 
 
 def test_organization_counts(db: Factory, as_user: AsUser) -> None:
@@ -198,3 +198,49 @@ def test_period_boundaries() -> None:
     assert days[0] == date(2026, 11, 11) - timedelta(days=PERIOD_DAYS - 1)
     assert start == datetime(2026, 10, 28, 17, 0, tzinfo=UTC)
     assert len(days) == PERIOD_DAYS
+
+
+def test_document_section_counts_my_files_and_lists_recent(db: Factory, as_user: AsUser) -> None:
+    sales = db.department("SALES")
+    me = as_user(["EMPLOYEE"], email="me@example.com", department_id=sales)
+    my_id = me.get("/api/v1/auth/me").json()["user"]["id"]
+    other = db.user("other@example.com", department_id=sales)
+    with db.engine.begin() as conn:
+        for title, owner, visibility, status in (
+            ("ready", my_id, "PRIVATE", "READY"),
+            ("queued", my_id, "PRIVATE", "PENDING"),
+            ("broken", my_id, "PRIVATE", "FAILED"),
+            ("shared", other, "DEPARTMENT", "READY"),
+            ("secret", other, "PRIVATE", "READY"),
+        ):
+            doc = conn.scalar(
+                text(
+                    "INSERT INTO documents (title, owner_id, department_id, visibility, status)"
+                    " VALUES (:t, :o, :d, :v, 'ACTIVE') RETURNING id"
+                ),
+                {"t": title, "o": owner, "d": sales, "v": visibility},
+            )
+            version = conn.scalar(
+                text(
+                    "INSERT INTO document_versions (document_id, version_number, storage_key,"
+                    " original_filename, file_type, mime_type, size_bytes, sha256,"
+                    " processing_status) VALUES (:d, 1, :k, 'a.txt', 'TXT', 'text/plain', 1,"
+                    " 'x', :s) RETURNING id"
+                ),
+                {"d": doc, "k": f"documents/{doc}/v1", "s": status},
+            )
+            conn.execute(
+                text("UPDATE documents SET current_version_id = :v WHERE id = :d"),
+                {"v": version, "d": doc},
+            )
+
+    documents = _summary(me)["documents"]
+    assert documents["accessible_count"] == 4  # never "secret"
+    assert (documents["my_documents"], documents["my_processing"], documents["my_failed"]) == (
+        3,
+        1,
+        1,
+    )
+    titles = {d["title"] for d in documents["recent"]}
+    assert titles == {"ready", "queued", "broken", "shared"}
+    assert {d["processing_status"] for d in documents["recent"]} == {"READY", "PENDING", "FAILED"}
