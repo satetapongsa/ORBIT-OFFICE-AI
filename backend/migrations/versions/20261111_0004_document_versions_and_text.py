@@ -89,12 +89,10 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("document_version_id", name=op.f("pk_document_version_texts")),
     )
-    # Existing rows get OTHER; afterwards the application always sets the category.
     op.add_column(
         "documents",
         sa.Column("category", sa.String(length=20), nullable=False, server_default="OTHER"),
     )
-    op.alter_column("documents", "category", server_default=None)
     op.create_check_constraint(
         op.f("ck_documents_category"),
         "documents",

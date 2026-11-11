@@ -107,7 +107,10 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         String(20), nullable=False, default=DocumentStatus.DRAFT.value
     )
     category: Mapped[str] = mapped_column(
-        String(20), nullable=False, default=DocumentCategory.OTHER.value
+        String(20),
+        nullable=False,
+        default=DocumentCategory.OTHER.value,
+        server_default=DocumentCategory.OTHER.value,
     )
     current_version_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("document_versions.id", ondelete="SET NULL", use_alter=True)
