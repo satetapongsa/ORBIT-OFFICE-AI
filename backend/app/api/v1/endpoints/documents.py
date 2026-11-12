@@ -17,6 +17,7 @@ from app.api.deps import (
     SettingsDep,
     get_document_processor,
     get_document_storage,
+    limit_uploads,
     require_permissions,
 )
 from app.core.permissions import P
@@ -126,6 +127,7 @@ async def search_content(
     response_model=DocumentDetail,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a new document (multipart: file + metadata)",
+    dependencies=[Depends(limit_uploads)],
 )
 async def upload_document(
     db: DbDep,
@@ -171,6 +173,7 @@ async def delete_document(
     response_model=DocumentDetail,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a new version (becomes current)",
+    dependencies=[Depends(limit_uploads)],
 )
 async def upload_version(
     document_id: uuid.UUID,

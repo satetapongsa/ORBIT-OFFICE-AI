@@ -11,7 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.db import get_db
-from app.core.errors import AppError, PermissionDeniedError, UnauthenticatedError
+from app.core.errors import (
+    AppError,
+    PermissionDeniedError,
+    RateLimitedError,
+    UnauthenticatedError,
+)
 from app.core.notifications import PasswordResetNotifier
 from app.core.principal import CurrentUser, RequestMeta
 from app.core.rate_limit import RateLimiter
@@ -161,3 +166,32 @@ def require_permissions(*codes: str) -> Callable[[CurrentUser], Awaitable[Curren
         return user
 
     return dependency
+
+
+def per_user_rate_limit(
+    bucket: str, limit: Callable[[Settings], int], window: Callable[[Settings], int]
+) -> Callable[..., Awaitable[None]]:
+    """Route guard: at most ``limit(settings)`` calls per user per ``window(settings)`` seconds
+    for this ``bucket`` (shared by the routes that use the same bucket)."""
+
+    async def dependency(request: Request, user: CurrentUserDep, settings: SettingsDep) -> None:
+        hit = await get_rate_limiter(request).hit(
+            f"{bucket}:user:{user.id}", limit=limit(settings), window_seconds=window(settings)
+        )
+        if not hit.allowed:
+            raise RateLimitedError(headers={"Retry-After": str(hit.retry_after_seconds)})
+
+    return dependency
+
+
+limit_uploads = per_user_rate_limit(
+    "upload", lambda s: s.upload_rate_limit, lambda s: s.upload_rate_limit_window_seconds
+)
+limit_exports = per_user_rate_limit(
+    "export", lambda s: s.export_rate_limit, lambda s: s.export_rate_limit_window_seconds
+)
+limit_ai_summaries = per_user_rate_limit(
+    "ai-summary",
+    lambda s: s.ai_chat_rate_limit_messages,
+    lambda s: s.ai_chat_rate_limit_window_seconds,
+)

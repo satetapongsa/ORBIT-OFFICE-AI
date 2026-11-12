@@ -74,7 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.rate_limiter = RedisRateLimiter(get_redis())
+    app.state.rate_limiter = RedisRateLimiter(get_redis(), fail_open=settings.rate_limit_fails_open)
     app.state.reset_notifier = build_reset_notifier(settings)
     app.state.document_storage = ObjectStorage(settings)
     app.state.document_processor = CeleryDocumentProcessor()

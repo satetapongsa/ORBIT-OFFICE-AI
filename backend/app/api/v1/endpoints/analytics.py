@@ -14,6 +14,8 @@ from app.api.deps import (
     MetaDep,
     SettingsDep,
     get_chat_provider,
+    limit_ai_summaries,
+    limit_exports,
     require_permissions,
 )
 from app.api.v1.endpoints.documents import content_disposition
@@ -57,6 +59,7 @@ async def overview(
     "/analytics/summary",
     response_model=AnalyticsSummary,
     summary="AI-written summary of the statistics (needs ai:chat and a configured model)",
+    dependencies=[Depends(limit_ai_summaries)],
 )
 async def summary(
     body: SummaryRequest,
@@ -113,7 +116,7 @@ async def _export(
 @router.get(
     "/reports/overview.xlsx",
     summary="Export the overview as Excel (reports:export; audited)",
-    dependencies=[Depends(require_permissions(P.REPORTS_EXPORT))],
+    dependencies=[Depends(require_permissions(P.REPORTS_EXPORT)), Depends(limit_exports)],
     response_class=Response,
 )
 async def export_xlsx(
@@ -131,7 +134,7 @@ async def export_xlsx(
 @router.get(
     "/reports/overview.pdf",
     summary="Export the overview as PDF (reports:export; audited)",
-    dependencies=[Depends(require_permissions(P.REPORTS_EXPORT))],
+    dependencies=[Depends(require_permissions(P.REPORTS_EXPORT)), Depends(limit_exports)],
     response_class=Response,
 )
 async def export_pdf(

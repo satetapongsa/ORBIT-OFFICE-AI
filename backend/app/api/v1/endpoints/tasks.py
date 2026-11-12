@@ -8,7 +8,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import CurrentUserDep, DbDep, MetaDep, SettingsDep, get_document_storage
+from app.api.deps import (
+    CurrentUserDep,
+    DbDep,
+    MetaDep,
+    SettingsDep,
+    get_document_storage,
+    limit_uploads,
+)
 from app.api.v1.endpoints.documents import content_disposition
 from app.models.task import TaskPriority, TaskStatus
 from app.repositories.tasks import TaskFilters
@@ -189,6 +196,7 @@ async def list_attachments(
     response_model=list[TaskAttachmentOut],
     status_code=status.HTTP_201_CREATED,
     summary="Attach a file (PDF, DOCX, XLSX or TXT)",
+    dependencies=[Depends(limit_uploads)],
 )
 async def add_attachment(
     task_id: uuid.UUID,

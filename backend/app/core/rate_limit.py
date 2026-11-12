@@ -1,8 +1,9 @@
 """Fixed-window rate limiting backed by Redis.
 
-If Redis is unavailable the limiter fails open (logs a warning) so an outage of the cache
-does not lock every user out; readiness reports Redis as down in that case. Reviewed in
-Phase 9 (see docs/SECURITY.md).
+When Redis is unavailable the limiter either fails open (allows the request and logs a
+warning; development default) or fails closed (refuses with 503; staging/production default,
+`RATE_LIMIT_FAIL_OPEN`), so an outage of the cache can never switch brute-force protection off
+in production (ADR-049).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import Protocol
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
+from app.core.errors import ServiceUnavailableError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -31,10 +33,18 @@ class RateLimiter(Protocol):
     async def reset(self, key: str) -> None: ...
 
 
+class RateLimiterUnavailableError(ServiceUnavailableError):
+    code = "rate_limiter_unavailable"
+    message = "ระบบไม่พร้อมรับคำขอนี้ชั่วคราว กรุณาลองใหม่ภายหลัง"
+
+
 class RedisRateLimiter:
-    def __init__(self, redis: Redis, prefix: str = "orbit:ratelimit:") -> None:
+    def __init__(
+        self, redis: Redis, prefix: str = "orbit:ratelimit:", *, fail_open: bool = True
+    ) -> None:
         self._redis = redis
         self._prefix = prefix
+        self._fail_open = fail_open
 
     async def hit(self, key: str, *, limit: int, window_seconds: int) -> RateLimitResult:
         full_key = f"{self._prefix}{key}"
@@ -45,7 +55,13 @@ class RedisRateLimiter:
                 pipe.ttl(full_key)
                 count, _, ttl = await pipe.execute()
         except RedisError as exc:
-            logger.warning("rate_limit_unavailable", error_type=type(exc).__name__)
+            logger.warning(
+                "rate_limit_unavailable",
+                error_type=type(exc).__name__,
+                fail_open=self._fail_open,
+            )
+            if not self._fail_open:
+                raise RateLimiterUnavailableError() from None
             return RateLimitResult(allowed=True)
         if int(count) > limit:
             return RateLimitResult(allowed=False, retry_after_seconds=max(int(ttl), 1))
