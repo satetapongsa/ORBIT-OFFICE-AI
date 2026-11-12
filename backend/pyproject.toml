@@ -53,6 +53,7 @@ testpaths = ["tests"]
 addopts = "-ra --strict-markers"
 markers = [
     "integration: requires running PostgreSQL/Redis/MinIO (set ORBIT_RUN_INTEGRATION=1)",
+    "e2e: end-to-end workflows against a running stack (scripts/e2e-test.sh)",
 ]
 filterwarnings = [
     "error::pytest.PytestUnraisableExceptionWarning",
