@@ -232,3 +232,87 @@ and see it become searchable (worker), and download it.
    and R2's bucket tools (or `python -m app.cli storage-export` from the backend shell).
 3. Vercel's Hobby plan is for non-commercial use; company use needs Pro.
 4. Two providers to watch: Vercel for pages, Railway for everything else.
+
+## 10. Free hosting: Oracle Cloud Always Free + Vercel
+
+The API side runs as the single-host stack (sections 1-7) on an Oracle Cloud "Always Free"
+virtual machine; the front end stays on Vercel (section 9.2). A free DuckDNS name and a
+Let's Encrypt certificate give the API an HTTPS address. Everything here is free of charge.
+
+### 10.1 Machine
+
+1. Sign up at cloud.oracle.com (a card is asked for identity checks; Always Free resources
+   are not billed). Upgrading the account to *Pay As You Go* keeps Always Free resources free
+   and stops Oracle reclaiming instances that look idle for 7 days.
+2. Compute → Instances → Create: image **Ubuntu 24.04**, shape **VM.Standard.A1.Flex**
+   (Ampere, arm64) with 2-4 OCPU and 12-24 GB memory, boot volume 100 GB, upload your SSH
+   public key. If the region reports "out of capacity", retry later or pick another
+   availability domain. All images used by the stack are published for arm64.
+3. Networking → the instance's subnet → Security List → add ingress rules for TCP **80** and
+   **443** from `0.0.0.0/0`.
+4. Note the instance's public IP.
+
+### 10.2 Name and firewall
+
+1. duckdns.org → sign in → add a subdomain (e.g. `orbit-office`) → set it to the public IP.
+   The API address is then `orbit-office.duckdns.org`.
+2. On the machine (`ssh ubuntu@<public-ip>`), Oracle's Ubuntu image blocks everything but
+   SSH in iptables; open 80 and 443:
+
+   ```bash
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+   sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+   sudo netfilter-persistent save
+   ```
+
+### 10.3 Software, certificate, configuration
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker ubuntu && newgrp docker
+sudo apt-get install -y certbot git
+sudo git clone https://github.com/satetapongsa/ORBIT-OFFICE-AI.git /opt/orbit-office
+sudo chown -R ubuntu:ubuntu /opt/orbit-office && cd /opt/orbit-office
+sudo certbot certonly --standalone -d orbit-office.duckdns.org
+mkdir -p infra/nginx/certs
+sudo cp /etc/letsencrypt/live/orbit-office.duckdns.org/{fullchain,privkey}.pem infra/nginx/certs/
+sudo chown ubuntu:ubuntu infra/nginx/certs/*.pem
+cp .env.production.example .env.production && chmod 600 .env.production
+```
+
+In `.env.production` replace every `CHANGE_ME` (`openssl rand -hex 32` for each) and set:
+
+```
+ORBIT_DOMAIN=orbit-office.duckdns.org
+FRONTEND_BASE_URL=https://<your-project>.vercel.app
+PROXY_SHARED_SECRET=<openssl rand -hex 32, the same value goes to Vercel>
+```
+
+Start the stack, create the first administrator and set up certificate renewal exactly as in
+sections 3 and 4 (`docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+--build`, then `create-admin`). The first build on the A1 machine takes several minutes.
+
+### 10.4 Vercel
+
+Project → Settings → Environment Variables (Production), then **Redeploy**:
+
+```
+BACKEND_INTERNAL_URL=https://orbit-office.duckdns.org
+PROXY_SHARED_SECRET=<the same value as in .env.production>
+```
+
+Checks: `https://orbit-office.duckdns.org/api/v1/health/live` answers `ok`;
+`https://orbit-office.duckdns.org/api/v1/health` answers `403 proxy_required`; the Vercel site
+shows the sign-in page and the administrator can sign in, upload a document and download it.
+The DuckDNS address itself is not a usable site (its pages call the API without the proxy
+secret); people use the Vercel address.
+
+### 10.5 Upkeep
+
+- Backups: `bash scripts/backup.sh --prod` from a daily cron job; copy `backups/` off the
+  machine (section 7). The free tier has no managed backups.
+- Updates: section 5 (`git pull` + `up -d --build`), Vercel redeploys from GitHub on push.
+- Security updates: `sudo apt-get update && sudo apt-get upgrade` monthly, or enable
+  `unattended-upgrades`.
+- Limits: one machine, no high availability (section 8); Vercel Hobby is for non-commercial
+  use.
