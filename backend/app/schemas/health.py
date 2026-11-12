@@ -33,6 +33,8 @@ class ReadinessResponse(BaseModel):
     status: ComponentStatus
     service: str
     version: str
-    environment: str
+    environment: str | None
     checked_at: datetime
     components: list[ComponentHealth]
+    # True when component details are withheld (public endpoint in production).
+    details_hidden: bool = False

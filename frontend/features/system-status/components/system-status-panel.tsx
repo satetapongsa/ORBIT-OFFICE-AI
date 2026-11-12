@@ -54,9 +54,14 @@ function Summary({ data }: { data: Readiness }) {
         <div className="space-y-1">
           <CardTitle>{ok ? "ระบบพร้อมใช้งาน" : "ระบบขัดข้องบางส่วน"}</CardTitle>
           <CardDescription>
-            ตรวจสอบล่าสุด {dateFormatter.format(new Date(data.checked_at))} · สภาพแวดล้อม{" "}
-            <span className="font-mono">{data.environment}</span> · เวอร์ชัน{" "}
-            <span className="font-mono">{data.version}</span>
+            ตรวจสอบล่าสุด {dateFormatter.format(new Date(data.checked_at))}
+            {data.environment ? (
+              <>
+                {" "}
+                · สภาพแวดล้อม <span className="font-mono">{data.environment}</span>
+              </>
+            ) : null}{" "}
+            · เวอร์ชัน <span className="font-mono">{data.version}</span>
           </CardDescription>
         </div>
         <StatusBadge status={data.status} />
@@ -107,6 +112,18 @@ export function SystemStatusPanel() {
         onRetry={handleRefresh}
         retrying={isFetching}
       />
+    );
+  }
+
+  if (data.details_hidden) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-end">{refreshButton}</div>
+        <Summary data={data} />
+        <p className="text-muted-foreground text-sm" data-testid="details-hidden">
+          รายละเอียดของแต่ละบริการแสดงเฉพาะผู้ดูแลระบบ
+        </p>
+      </div>
     );
   }
 
