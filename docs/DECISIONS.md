@@ -379,3 +379,55 @@ must cite them as `[n]`, and only cited sources are stored and shown under the a
 empty search returns an explicit "no evidence" instruction.
 **Why.** The model decides when knowledge is needed, while every passage still comes through
 the permission-filtered path and stays attributable.
+
+## ADR-044 — Helpdesk tickets: visibility, statuses and internal notes (2026-11-12)
+**Decision.** Tickets get a readable number from a database sequence (`IT-<year>-<000001>`).
+One predicate (`visible_tickets_condition`) decides visibility: `tickets:read_all` sees every
+ticket, `tickets:read_own` only tickets the user reported; invisible tickets answer 404. IT
+staff (`tickets:manage`) may set any status; requesters may only cancel an open ticket, or
+close/reopen a resolved one (`allowed_statuses` is returned as a capability). Assigning needs
+`tickets:assign` and the assignee must hold `tickets:manage`; assigning an `OPEN` ticket starts
+work. Comments and history events carry `is_internal`; internal ones are filtered out in SQL for
+people without `tickets:comment_internal` and never notify the requester. A requester reply
+while `WAITING_FOR_USER` moves the ticket back to `IN_PROGRESS`.
+**Why.** Same pattern as documents and tasks (one predicate, capabilities from the server),
+and the requester only ever sees actions that make sense to them.
+
+## ADR-045 — Notification e-mail after commit, with per-type preferences (2026-11-12)
+**Decision.** `notify()` stays inside the business transaction; the notification id is queued
+on the session and handed to the Celery task `notifications.send_emails` only in
+`after_commit` (dropped on rollback). The worker mails each notification at most once
+(`email_status` PENDING → SENT/SKIPPED/FAILED) to the account address when SMTP is configured
+and the user wants that type (`notification_preferences`, defaults: everything except
+`DOCUMENT`). Mail goes through the standard library (`smtplib`, STARTTLS/SSL/login). Password
+reset links are e-mailed the same way when SMTP is set. Development uses Mailpit
+(http://127.0.0.1:8025); tests run with `SMTP_HOST` empty.
+**Why.** No e-mail for changes that did not happen, no SMTP latency in requests, and no extra
+mail SDK.
+
+## ADR-046 — Analytics scopes follow permissions (2026-11-12)
+**Decision.** `GET /analytics/overview?scope=own|department|all` needs
+`analytics:read_own|read_department|read_all` (department scope also needs a department).
+Own = tasks assigned to me, tickets I reported, my documents; department = the department's
+tasks and documents and tickets reported by its people; all = the organisation. Aggregates
+are computed in SQL per request over Bangkok calendar days (default 30, max 366). Exported row
+lists are additionally filtered by the normal task/ticket visibility predicates, so a report
+never lists a row its reader could not open (counts may cover more, e.g. a department's
+tickets). The AI summary sends only the aggregated numbers (no titles or names) to the model.
+**Why.** Managers need department figures without gaining access to every record behind them.
+
+## ADR-047 — Report exports: openpyxl and WeasyPrint (2026-11-12)
+**Decision.** `GET /reports/overview.xlsx|pdf` (`reports:export` + the scope permission,
+audited as `report.exported`). Excel via openpyxl; text cells that start with `=` are stored
+as strings (no formula injection). PDF via WeasyPrint from escaped HTML, with Pango/HarfBuzz and
+the TLWG Thai fonts installed in the backend image; rendering runs in a thread. Lists are capped
+(2,000 rows in Excel, 100 per list in the PDF).
+**Why.** Correct Thai shaping needs a real text layout engine; HTML keeps the layout simple.
+
+## ADR-048 — Role and permission editor on `/settings` (2026-11-12)
+**Decision.** `/settings` (`roles:read`) lists roles with their permissions grouped by domain;
+`roles:manage` can create custom roles, rename them, edit permissions and delete unused custom
+roles. The UI disables permissions the editor does not hold (the backend still enforces
+ADR-018); `ADMIN` is locked; system role names come from `sync-rbac` and are not editable.
+**Why.** Roles are data (ADR-005); administrators need to manage them without the API docs.
+
