@@ -1,4 +1,4 @@
-"""Shared upload handling for documents and task attachments (docs/SECURITY.md §4).
+"""Shared upload handling for documents, task and ticket attachments (docs/SECURITY.md §4).
 
 Size is measured while hashing, the type is sniffed from the content, objects are written
 under server-generated keys and removed again when the database transaction fails.
@@ -7,6 +7,7 @@ under server-generated keys and removed again when the database transaction fail
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import BinaryIO, Protocol
 
@@ -39,7 +40,12 @@ class StoredUpload:
     sha256: str
 
 
-async def receive_upload(upload: UploadFile, settings: Settings) -> StoredUpload:
+Inspector = Callable[[BinaryIO, str | None], InspectedFile]
+
+
+async def receive_upload(
+    upload: UploadFile, settings: Settings, inspector: Inspector = inspect_upload
+) -> StoredUpload:
     """Hash and size-check the (already spooled) upload, then sniff its type."""
     await upload.seek(0)
     digest = hashlib.sha256()
@@ -52,7 +58,7 @@ async def receive_upload(upload: UploadFile, settings: Settings) -> StoredUpload
             )
         digest.update(chunk)
     await upload.seek(0)
-    inspected = await anyio.to_thread.run_sync(inspect_upload, upload.file, upload.filename)
+    inspected = await anyio.to_thread.run_sync(inspector, upload.file, upload.filename)
     return StoredUpload(inspected=inspected, size_bytes=size, sha256=digest.hexdigest())
 
 

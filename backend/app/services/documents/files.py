@@ -11,11 +11,12 @@ import re
 import unicodedata
 import zipfile
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import BinaryIO
 
 from app.core.errors import AppError
-from app.models.document import FileType
+from app.models.document import FileType, ImageType
 
 MIME_TYPES: dict[FileType, str] = {
     FileType.PDF: "application/pdf",
@@ -30,6 +31,22 @@ EXTENSIONS: dict[str, FileType] = {
     ".xlsx": FileType.XLSX,
     ".txt": FileType.TXT,
 }
+
+# Attachments only (ticket screenshots): never parsed, only stored and downloaded.
+IMAGE_MIME_TYPES: dict[ImageType, str] = {
+    ImageType.PNG: "image/png",
+    ImageType.JPEG: "image/jpeg",
+}
+IMAGE_EXTENSIONS: dict[str, ImageType] = {
+    ".png": ImageType.PNG,
+    ".jpg": ImageType.JPEG,
+    ".jpeg": ImageType.JPEG,
+}
+_IMAGE_MAGIC: dict[ImageType, bytes] = {
+    ImageType.PNG: b"\x89PNG\r\n\x1a\n",
+    ImageType.JPEG: b"\xff\xd8\xff",
+}
+ATTACHMENT_TYPES_MESSAGE = "รองรับเฉพาะไฟล์ PDF, DOCX, XLSX, TXT, PNG และ JPG"
 
 # Archive (DOCX/XLSX) limits — protect the API and the worker from zip bombs.
 MAX_ZIP_ENTRIES = 5_000
@@ -66,12 +83,12 @@ class EmptyFileError(AppError):
 
 @dataclass(frozen=True, slots=True)
 class InspectedFile:
-    file_type: FileType
+    file_type: FileType | ImageType
     mime_type: str
     filename: str
 
 
-def sanitize_filename(raw: str | None, file_type: FileType) -> str:
+def sanitize_filename(raw: str | None, file_type: StrEnum) -> str:
     """A display-safe base name ending in the sniffed type's extension.
 
     Directory parts, control characters and reserved characters are removed; the result is
@@ -190,4 +207,27 @@ def inspect_upload(fileobj: BinaryIO, filename: str | None) -> InspectedFile:
         file_type=sniffed,
         mime_type=MIME_TYPES[sniffed],
         filename=sanitize_filename(filename, sniffed),
+    )
+
+
+def inspect_attachment(fileobj: BinaryIO, filename: str | None) -> InspectedFile:
+    """Ticket attachments: the document formats (same checks as :func:`inspect_upload`) or a
+    PNG/JPEG image identified by its signature and matching its extension."""
+    suffix = PurePosixPath(PureWindowsPath(filename or "").name).suffix.lower()
+    image = IMAGE_EXTENSIONS.get(suffix)
+    if image is None:
+        if suffix not in EXTENSIONS:
+            raise UnsupportedFileError(ATTACHMENT_TYPES_MESSAGE)
+        return inspect_upload(fileobj, filename)
+    fileobj.seek(0)
+    head = fileobj.read(16)
+    fileobj.seek(0)
+    if not head:
+        raise EmptyFileError()
+    if not head.startswith(_IMAGE_MAGIC[image]):
+        raise UnsupportedFileError("เนื้อหาไฟล์ไม่ตรงกับนามสกุลไฟล์ (" + ATTACHMENT_TYPES_MESSAGE + ")")
+    return InspectedFile(
+        file_type=image,
+        mime_type=IMAGE_MIME_TYPES[image],
+        filename=sanitize_filename(filename, image),
     )
