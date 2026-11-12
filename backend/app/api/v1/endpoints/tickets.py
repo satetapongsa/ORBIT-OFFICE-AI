@@ -5,9 +5,19 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 
-from app.api.deps import CurrentUserDep, DbDep, MetaDep, SettingsDep, require_permissions
+from app.api.deps import (
+    CurrentUserDep,
+    DbDep,
+    MetaDep,
+    SettingsDep,
+    get_document_storage,
+    limit_uploads,
+    require_permissions,
+)
+from app.api.v1.endpoints.documents import content_disposition
 from app.core.errors import PermissionDeniedError
 from app.core.permissions import P
 from app.core.principal import CurrentUser
@@ -19,6 +29,7 @@ from app.schemas.identity import DepartmentRef
 from app.schemas.tasks import AssignableUser
 from app.schemas.tickets import (
     TicketAssign,
+    TicketAttachmentOut,
     TicketCommentIn,
     TicketCommentOut,
     TicketCreate,
@@ -31,8 +42,11 @@ from app.schemas.tickets import (
     TicketUpdate,
 )
 from app.services.tickets import service as ticket_service
+from app.services.uploads import FileStorage
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+StorageDep = Annotated[FileStorage, Depends(get_document_storage)]
 
 
 def _require_reader(user: CurrentUser) -> None:
@@ -166,3 +180,87 @@ async def add_comment(
 async def history(ticket_id: uuid.UUID, db: DbDep, user: CurrentUserDep) -> list[TicketEventOut]:
     _require_reader(user)
     return await ticket_service.history(db, user, ticket_id)
+
+
+@router.get(
+    "/{ticket_id}/attachments",
+    response_model=list[TicketAttachmentOut],
+    summary="Attachments (internal files only for the IT team)",
+)
+async def list_attachments(
+    ticket_id: uuid.UUID, db: DbDep, user: CurrentUserDep
+) -> list[TicketAttachmentOut]:
+    _require_reader(user)
+    return await ticket_service.attachments(db, user, ticket_id)
+
+
+@router.post(
+    "/{ticket_id}/attachments",
+    response_model=list[TicketAttachmentOut],
+    status_code=status.HTTP_201_CREATED,
+    summary="Attach a file (PDF, DOCX, XLSX, TXT, PNG or JPG)",
+    dependencies=[Depends(limit_uploads)],
+)
+async def add_attachment(
+    ticket_id: uuid.UUID,
+    db: DbDep,
+    settings: SettingsDep,
+    user: CurrentUserDep,
+    meta: MetaDep,
+    storage: StorageDep,
+    file: Annotated[UploadFile, File(description="PDF, DOCX, XLSX, TXT, PNG or JPG")],
+    is_internal: Annotated[bool, Form()] = False,
+) -> list[TicketAttachmentOut]:
+    _require_reader(user)
+    await ticket_service.add_attachment(
+        db, settings, storage, user, ticket_id, file, is_internal, meta
+    )
+    return await ticket_service.attachments(db, user, ticket_id)
+
+
+@router.delete(
+    "/{ticket_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove an attachment",
+)
+async def delete_attachment(
+    ticket_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: DbDep,
+    user: CurrentUserDep,
+    meta: MetaDep,
+    storage: StorageDep,
+) -> Response:
+    _require_reader(user)
+    await ticket_service.delete_attachment(db, storage, user, ticket_id, attachment_id, meta)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/{ticket_id}/attachments/{attachment_id}/download",
+    response_class=StreamingResponse,
+    summary="Download an attachment (audited)",
+)
+async def download_attachment(
+    ticket_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    db: DbDep,
+    user: CurrentUserDep,
+    meta: MetaDep,
+    storage: StorageDep,
+) -> StreamingResponse:
+    _require_reader(user)
+    attachment, stream = await ticket_service.open_attachment(
+        db, storage, user, ticket_id, attachment_id, meta
+    )
+    return StreamingResponse(
+        iter(stream),
+        media_type=attachment.mime_type,
+        headers={
+            # Always a download, never rendered by the browser (images included).
+            "Content-Disposition": content_disposition(attachment.original_filename),
+            "Content-Length": str(attachment.size_bytes),
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
+    )

@@ -49,6 +49,8 @@ class TicketCapabilities(BaseModel):
     can_assign: bool
     can_comment: bool
     can_comment_internal: bool
+    can_attach: bool
+    can_attach_internal: bool
     allowed_statuses: list[TicketStatus]
 
 
@@ -85,6 +87,20 @@ class TicketCommentOut(BaseModel):
     body: str
     is_internal: bool
     created_at: datetime
+
+
+TicketAttachmentType = Literal["PDF", "DOCX", "XLSX", "TXT", "PNG", "JPEG"]
+
+
+class TicketAttachmentOut(BaseModel):
+    id: uuid.UUID
+    original_filename: str
+    file_type: TicketAttachmentType
+    size_bytes: int = Field(ge=0)
+    is_internal: bool
+    uploaded_by: UserRef | None
+    created_at: datetime
+    can_delete: bool
 
 
 class TicketEventOut(BaseModel):

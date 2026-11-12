@@ -10,6 +10,10 @@
 | assign                            | ``tickets:assign`` (assignee holds ``tickets:manage``)      |
 | requester: cancel an open ticket, | the requester                                               |
 | close or reopen a resolved one    |                                                             |
+| attach files                      | anyone who sees the ticket while it is not closed/cancelled |
+|                                   | (``tickets:manage`` always); internal files need            |
+|                                   | ``tickets:comment_internal``                                |
+| remove an attachment              | its uploader while the ticket is open, or ``tickets:manage`` |
 
 A requester's reply to a ticket waiting for them moves it back to IN_PROGRESS.
 Unknown and invisible tickets both answer 404.
@@ -20,16 +24,24 @@ from __future__ import annotations
 import uuid
 from zoneinfo import ZoneInfo
 
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
-from app.core.errors import NotFoundError, PermissionDeniedError, ValidationFailedError
+from app.core.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationFailedError,
+)
 from app.core.permissions import P
 from app.core.principal import CurrentUser, RequestMeta
 from app.core.security import utcnow
+from app.core.storage import ObjectStream
 from app.models.notification import NotificationType
 from app.models.ticket import (
     Ticket,
+    TicketAttachment,
     TicketCategory,
     TicketComment,
     TicketEvent,
@@ -42,6 +54,7 @@ from app.repositories.tickets import TicketRow
 from app.schemas.common import ErrorDetail
 from app.schemas.documents import UserRef
 from app.schemas.tickets import (
+    TicketAttachmentOut,
     TicketCapabilities,
     TicketCommentOut,
     TicketCreate,
@@ -52,8 +65,19 @@ from app.schemas.tickets import (
 )
 from app.services import audit, notifications
 from app.services.audit import AuditAction
+from app.services.documents.files import inspect_attachment
+from app.services.uploads import (
+    FileStorage,
+    discard_object,
+    open_object,
+    receive_upload,
+    store_upload,
+)
 
 NOT_FOUND = "ไม่พบรายการแจ้งปัญหา หรือคุณไม่มีสิทธิ์เข้าถึง"
+ATTACHMENT_NOT_FOUND = "ไม่พบไฟล์แนบนี้"
+MAX_ATTACHMENTS = 20
+_FINISHED = (TicketStatus.CLOSED, TicketStatus.CANCELLED)
 
 STATUS_LABELS = {
     TicketStatus.OPEN: "รอรับเรื่อง",
@@ -86,12 +110,25 @@ def allowed_statuses(user: CurrentUser, ticket: Ticket) -> list[TicketStatus]:
     return []
 
 
+def can_attach(user: CurrentUser, ticket: Ticket) -> bool:
+    return user.has(P.TICKETS_MANAGE) or TicketStatus(ticket.status) not in _FINISHED
+
+
+def can_delete_attachment(user: CurrentUser, ticket: Ticket, attachment: TicketAttachment) -> bool:
+    if user.has(P.TICKETS_MANAGE):
+        return True
+    return attachment.uploaded_by == user.id and TicketStatus(ticket.status) not in _FINISHED
+
+
 def capabilities_for(user: CurrentUser, ticket: Ticket) -> TicketCapabilities:
+    attach = can_attach(user, ticket)
     return TicketCapabilities(
         can_manage=user.has(P.TICKETS_MANAGE),
         can_assign=user.has(P.TICKETS_ASSIGN),
         can_comment=True,
         can_comment_internal=user.has(P.TICKETS_COMMENT_INTERNAL),
+        can_attach=attach,
+        can_attach_internal=attach and user.has(P.TICKETS_COMMENT_INTERNAL),
         allowed_statuses=allowed_statuses(user, ticket),
     )
 
@@ -409,6 +446,196 @@ async def add_comment(
             session, ticket.requester_id, ticket, "ทีมไอทีตอบกลับ", f"{user.display_name}: {excerpt}"
         )
     await session.commit()
+
+
+# --- Attachments ----------------------------------------------------------------------
+
+
+async def _notify_other_party(
+    session: AsyncSession, user: CurrentUser, ticket: Ticket, title: str, body: str
+) -> None:
+    """Public activity by the requester goes to the assignee (or the dispatchers); activity by
+    anyone else goes to the requester."""
+    if user.id == ticket.requester_id:
+        recipients = (
+            [ticket.assignee_id]
+            if ticket.assignee_id
+            else [u.id for u in await ticket_repo.users_with_permission(session, P.TICKETS_ASSIGN)]
+        )
+    else:
+        recipients = [ticket.requester_id]
+    for rid in recipients:
+        if rid != user.id:
+            _notify(session, rid, ticket, title, body)
+
+
+async def add_attachment(
+    session: AsyncSession,
+    settings: Settings,
+    storage: FileStorage,
+    user: CurrentUser,
+    ticket_id: uuid.UUID,
+    upload: UploadFile,
+    internal: bool,
+    meta: RequestMeta,
+) -> None:
+    row = await _visible(session, user, ticket_id)
+    _deny(can_attach(user, row.ticket), "รายการนี้ปิดแล้ว แนบไฟล์เพิ่มไม่ได้")
+    if internal:
+        _deny(user.has(P.TICKETS_COMMENT_INTERNAL), "ไฟล์ภายในใช้ได้เฉพาะทีมไอที")
+    if await ticket_repo.count_attachments(session, ticket_id) >= MAX_ATTACHMENTS:
+        raise ConflictError(f"แนบไฟล์ได้สูงสุด {MAX_ATTACHMENTS} ไฟล์ต่อรายการ")
+    stored = await receive_upload(upload, settings, inspect_attachment)
+    attachment_id = uuid.uuid4()
+    key = f"tickets/{ticket_id}/{attachment_id}"
+    await store_upload(storage, key, upload, stored)
+    try:
+        ticket = await _lock(session, ticket_id)
+        filename = stored.inspected.filename
+        session.add(
+            TicketAttachment(
+                id=attachment_id,
+                ticket_id=ticket_id,
+                storage_key=key,
+                original_filename=filename,
+                file_type=stored.inspected.file_type.value,
+                mime_type=stored.inspected.mime_type,
+                size_bytes=stored.size_bytes,
+                sha256=stored.sha256,
+                is_internal=internal,
+                uploaded_by=user.id,
+            )
+        )
+        _event(
+            session,
+            ticket,
+            user,
+            TicketEventType.ATTACHMENT_ADDED,
+            to_value=filename,
+            internal=internal,
+        )
+        ticket.updated_at = utcnow()
+        if not internal:
+            await _notify_other_party(
+                session, user, ticket, "แนบไฟล์ใหม่", f"{user.display_name}: {filename}"
+            )
+        audit.record(
+            session,
+            AuditAction.TICKET_ATTACHMENT_ADDED,
+            actor_id=user.id,
+            meta=meta,
+            entity_type="ticket",
+            entity_id=ticket_id,
+            details={
+                "filename": filename,
+                "file_type": stored.inspected.file_type.value,
+                "size_bytes": stored.size_bytes,
+                "internal": internal,
+            },
+        )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        await discard_object(storage, key)
+        raise
+
+
+async def _visible_attachment(
+    session: AsyncSession, user: CurrentUser, ticket_id: uuid.UUID, attachment_id: uuid.UUID
+) -> tuple[TicketRow, TicketAttachment]:
+    row = await _visible(session, user, ticket_id)
+    attachment = await ticket_repo.get_attachment(session, ticket_id, attachment_id)
+    # Internal files do not exist for people outside the IT team.
+    if attachment is None or (attachment.is_internal and not user.has(P.TICKETS_COMMENT_INTERNAL)):
+        raise NotFoundError(ATTACHMENT_NOT_FOUND)
+    return row, attachment
+
+
+async def delete_attachment(
+    session: AsyncSession,
+    storage: FileStorage,
+    user: CurrentUser,
+    ticket_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    meta: RequestMeta,
+) -> None:
+    row, attachment = await _visible_attachment(session, user, ticket_id, attachment_id)
+    _deny(can_delete_attachment(user, row.ticket, attachment), "คุณไม่มีสิทธิ์ลบไฟล์แนบนี้")
+    ticket = await _lock(session, ticket_id)
+    key, filename, internal = (
+        attachment.storage_key,
+        attachment.original_filename,
+        attachment.is_internal,
+    )
+    await session.delete(attachment)
+    _event(
+        session,
+        ticket,
+        user,
+        TicketEventType.ATTACHMENT_REMOVED,
+        from_value=filename,
+        internal=internal,
+    )
+    audit.record(
+        session,
+        AuditAction.TICKET_ATTACHMENT_REMOVED,
+        actor_id=user.id,
+        meta=meta,
+        entity_type="ticket",
+        entity_id=ticket_id,
+        details={"filename": filename, "internal": internal},
+    )
+    await session.commit()
+    # The row is gone; the object is removed after the commit (a failure leaves an orphan that
+    # the daily clean-up removes).
+    await discard_object(storage, key)
+
+
+async def open_attachment(
+    session: AsyncSession,
+    storage: FileStorage,
+    user: CurrentUser,
+    ticket_id: uuid.UUID,
+    attachment_id: uuid.UUID,
+    meta: RequestMeta,
+) -> tuple[TicketAttachment, ObjectStream]:
+    _, attachment = await _visible_attachment(session, user, ticket_id, attachment_id)
+    stream = await open_object(storage, attachment.storage_key)
+    audit.record(
+        session,
+        AuditAction.TICKET_ATTACHMENT_DOWNLOADED,
+        actor_id=user.id,
+        meta=meta,
+        entity_type="ticket",
+        entity_id=ticket_id,
+        details={"filename": attachment.original_filename},
+    )
+    await session.commit()
+    return attachment, stream
+
+
+async def attachments(
+    session: AsyncSession, user: CurrentUser, ticket_id: uuid.UUID
+) -> list[TicketAttachmentOut]:
+    row = await _visible(session, user, ticket_id)
+    internal = user.has(P.TICKETS_COMMENT_INTERNAL)
+    return [
+        TicketAttachmentOut(
+            id=a.id,
+            original_filename=a.original_filename,
+            file_type=a.file_type,
+            size_bytes=a.size_bytes,
+            is_internal=a.is_internal,
+            uploaded_by=UserRef(id=a.uploaded_by, display_name=name or "ผู้ใช้ที่ถูกลบ")
+            if a.uploaded_by
+            else None,
+            created_at=a.created_at,
+            can_delete=can_delete_attachment(user, row.ticket, a),
+        )
+        for a, name in await ticket_repo.list_attachments(
+            session, ticket_id, include_internal=internal
+        )
+    ]
 
 
 # --- Queries --------------------------------------------------------------------------

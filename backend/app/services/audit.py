@@ -60,6 +60,9 @@ class AuditAction(StrEnum):
     TICKET_STATUS_CHANGED = "ticket.status_changed"
     TICKET_ASSIGNED = "ticket.assigned"
     TICKET_UPDATED = "ticket.updated"
+    TICKET_ATTACHMENT_ADDED = "ticket.attachment_added"
+    TICKET_ATTACHMENT_REMOVED = "ticket.attachment_removed"
+    TICKET_ATTACHMENT_DOWNLOADED = "ticket.attachment_downloaded"
     REPORT_EXPORTED = "report.exported"
 
 

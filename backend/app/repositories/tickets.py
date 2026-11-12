@@ -22,6 +22,7 @@ from app.models.task import TaskPriority
 from app.models.ticket import (
     OPEN_TICKET_STATUSES,
     Ticket,
+    TicketAttachment,
     TicketComment,
     TicketEvent,
 )
@@ -192,3 +193,38 @@ async def list_events(
     if not include_internal:
         stmt = stmt.where(TicketEvent.is_internal.is_(False))
     return [(r[0], r[1]) for r in await session.execute(stmt)]
+
+
+async def list_attachments(
+    session: AsyncSession, ticket_id: uuid.UUID, *, include_internal: bool
+) -> list[tuple[TicketAttachment, str | None]]:
+    stmt = (
+        select(TicketAttachment, User.display_name)
+        .outerjoin(User, User.id == TicketAttachment.uploaded_by)
+        .where(TicketAttachment.ticket_id == ticket_id)
+        .order_by(TicketAttachment.created_at, TicketAttachment.id)
+    )
+    if not include_internal:
+        stmt = stmt.where(TicketAttachment.is_internal.is_(False))
+    return [(r[0], r[1]) for r in await session.execute(stmt)]
+
+
+async def get_attachment(
+    session: AsyncSession, ticket_id: uuid.UUID, attachment_id: uuid.UUID
+) -> TicketAttachment | None:
+    return await session.scalar(
+        select(TicketAttachment).where(
+            TicketAttachment.id == attachment_id, TicketAttachment.ticket_id == ticket_id
+        )
+    )
+
+
+async def count_attachments(session: AsyncSession, ticket_id: uuid.UUID) -> int:
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(TicketAttachment)
+            .where(TicketAttachment.ticket_id == ticket_id)
+        )
+        or 0
+    )
