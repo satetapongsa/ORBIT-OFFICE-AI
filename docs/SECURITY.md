@@ -262,6 +262,9 @@ descriptions are plain text in the UI (never HTML).
   summaries, uploads and report exports (per user); fails closed in production (ADR-049).
   Production Nginx adds an IP limit on the credential endpoints and overwrites
   `X-Forwarded-For` with the connecting address.
+- Front end on Vercel (ADR-055): `PROXY_SHARED_SECRET` makes the API refuse requests that did
+  not come through Vercel (`403 proxy_required`); the visitor IP is read from
+  `X-Vercel-Forwarded-For` only after the secret matched. API responses are `no-store`.
 - Readiness: production shows only the overall status publicly; component details need the
   `X-Health-Token` header or `system:configure` (`GET /health/details`).
 

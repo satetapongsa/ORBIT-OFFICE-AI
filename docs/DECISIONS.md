@@ -497,3 +497,19 @@ public files notify the other party; the orphan sweep and backups include ticket
 **Why.** A screenshot of the error is the most useful thing a requester can give IT; documents
 keep their four formats because their text is extracted and indexed.
 
+## ADR-055 — Front end on Vercel with the API hosted separately (2026-11-12)
+**Decision.** Besides the single-host stack (ADR-053), the front end may run on Vercel while
+the API, worker, beat, PostgreSQL, Redis and storage run on a container host (documented with
+Railway and Cloudflare R2, `docs/DEPLOYMENT.md` section 9). Vercel keeps proxying `/api/*` to
+the API (`BACKEND_INTERNAL_URL`), so pages and API share one origin and cookies, CSRF and the
+CSP stay as they are. Because the API then has a public address of its own,
+`PROXY_SHARED_SECRET` closes it to direct calls: `frontend/vercel.json` sets
+`X-Orbit-Proxy-Secret` on every proxied request, the API answers `403 proxy_required` without
+it (only the liveness probe is exempt), drops the header before handlers, and takes the
+visitor IP from `X-Vercel-Forwarded-For`, which Vercel sets itself. API responses default to
+`Cache-Control: no-store` so no CDN keeps per-user data; `postgres://` URLs from hosted
+databases are switched to the psycopg driver.
+**Why.** The user already deploys the front end from GitHub to Vercel, which cannot run the
+API's long-lived processes. Without the secret anyone could call the API directly with a
+forged `X-Forwarded-For` and spread login attempts over fake IPs.
+

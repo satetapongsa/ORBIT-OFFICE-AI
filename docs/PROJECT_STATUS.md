@@ -281,12 +281,23 @@
   previewed it and added an internal file, the employee saw only the screenshot and got 404 for
   the internal file.
 
+### After Phase 9 — Front end on Vercel, API hosted separately (2026-11-12)
+- The user deployed `frontend/` to Vercel from GitHub; the page stayed blank because no API was
+  reachable (`BACKEND_INTERNAL_URL` unset). Chosen layout: front end on Vercel, API side on a
+  container host (Railway + R2 documented in `docs/DEPLOYMENT.md` section 9, ADR-055).
+- `PROXY_SHARED_SECRET` + `TrustedProxyMiddleware` (403 `proxy_required` without the header,
+  visitor IP from `X-Vercel-Forwarded-For`), `frontend/vercel.json` adds the header, API
+  responses default to `Cache-Control: no-store`, `postgres://` URLs accepted.
+- Verified: backend **341 passed**, frontend **97 passed**, e2e 6 passed, smoke passed. Not yet
+  verified on Vercel/Railway themselves (needs the user's accounts): the header transform,
+  25 MB uploads and streamed answers through Vercel's proxy.
+
 ## In Progress
 - Nothing. All phases (0–9) are complete.
 
 ## Remaining
-- Go-live on a real server (`docs/DEPLOYMENT.md`): DNS, certificate, `.env.production`, SMTP
-  provider, off-site backup schedule. Nothing has been deployed yet.
+- Go-live: either the single-host stack (`docs/DEPLOYMENT.md` sections 1-8) or Vercel + a
+  container host (section 9). The front end is on Vercel; the API side is not deployed yet.
 - Not built (possible next work): due-date reminders, settings UI for AI / SMTP, OCR for
   scanned PDFs, antivirus scanning, browser-driven UI tests (Playwright).
 
@@ -313,7 +324,8 @@ fixed 1024-dimension embeddings and re-indexing (ADR-042); RAG through tools wit
 preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF exports
 (ADR-047); role editor on `/settings` (ADR-048); fail-closed rate limiting (ADR-049); CSP
 without nonces (ADR-050); retention clean-up (ADR-051); backups with verified restore
-(ADR-052); single-host production stack (ADR-053); ticket attachments (ADR-054).
+(ADR-052); single-host production stack (ADR-053); ticket attachments (ADR-054); Vercel front end with a
+separately hosted API (ADR-055).
 
 ## Tests
 ### Phase 9 verification — 2026-11-12
