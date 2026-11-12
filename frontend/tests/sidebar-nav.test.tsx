@@ -2,7 +2,13 @@ import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SidebarNav } from "@/components/layout/sidebar-nav";
-import { MAIN_NAV, isNavItemActive } from "@/lib/navigation";
+import {
+  CURRENT_PHASE,
+  MAIN_NAV,
+  SECONDARY_NAV,
+  isNavItemActive,
+  isNavItemAvailable,
+} from "@/lib/navigation";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }));
 
@@ -11,7 +17,9 @@ vi.mock("@/features/auth/hooks/use-session", () => ({
   useSession: () => ({ has: (p: string) => permissions.has(p) }),
 }));
 
-const ALL = MAIN_NAV.map((i) => i.permission).filter((p): p is string => p !== null);
+const ALL = [...MAIN_NAV, ...SECONDARY_NAV]
+  .map((i) => i.permission)
+  .filter((p): p is string => p !== null);
 
 describe("SidebarNav", () => {
   beforeEach(() => {
@@ -35,15 +43,23 @@ describe("SidebarNav", () => {
     expect(screen.queryByTestId("nav-settings")).not.toBeInTheDocument();
   });
 
-  it("does not render links for modules that are not implemented yet", () => {
+  it("links every module once its phase has shipped (Phase 8: all of them)", () => {
     render(<SidebarNav />);
-    const helpdesk = screen.getByTestId("nav-helpdesk"); // Phase 8
-    expect(helpdesk.tagName).not.toBe("A");
-    expect(helpdesk).toHaveAttribute("aria-disabled", "true");
-    expect(helpdesk).toHaveTextContent("เร็วๆ นี้");
-    for (const key of ["dashboard", "assistant", "notifications", "system-status"]) {
-      expect(screen.getByTestId(`nav-${key}`).tagName).toBe("A");
+    for (const item of [...MAIN_NAV, ...SECONDARY_NAV]) {
+      const link = screen.getByTestId(`nav-${item.key}`);
+      expect(link.tagName).toBe("A");
+      expect(link).toHaveAttribute("href", item.href);
     }
+    expect(screen.queryByText("เร็วๆ นี้")).not.toBeInTheDocument();
+  });
+
+  it("treats modules of later phases as unavailable", () => {
+    const helpdesk = MAIN_NAV.find((i) => i.key === "helpdesk");
+    expect(helpdesk).toBeDefined();
+    if (!helpdesk) return;
+    expect(CURRENT_PHASE).toBe(8);
+    expect(isNavItemAvailable(helpdesk)).toBe(true);
+    expect(isNavItemAvailable(helpdesk, 7)).toBe(false);
   });
 
   it("marks the current page as active", () => {
