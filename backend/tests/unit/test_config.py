@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import DEV_STORAGE_SECRET_PLACEHOLDER, AIProvider, Settings
+from app.core.config import (
+    DEV_JWT_SECRET_PLACEHOLDER,
+    DEV_STORAGE_SECRET_PLACEHOLDER,
+    AIProvider,
+    Settings,
+)
 
 
 def test_defaults_are_development_safe(settings_factory: Callable[..., Settings]) -> None:
@@ -25,32 +31,66 @@ def test_cors_wildcard_rejected(settings_factory: Callable[..., Settings]) -> No
         settings_factory(cors_origins="*")
 
 
-def test_production_rejects_default_jwt_secret(settings_factory: Callable[..., Settings]) -> None:
-    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
-        settings_factory(environment="production")
-
-
-def test_production_rejects_default_storage_secret(
-    settings_factory: Callable[..., Settings],
-) -> None:
-    with pytest.raises(ValidationError, match="STORAGE_SECRET_KEY"):
-        settings_factory(
-            environment="production",
-            jwt_secret_key="x" * 64,
-            storage_secret_key=DEV_STORAGE_SECRET_PLACEHOLDER,
-        )
+# A complete, valid production configuration; tests change one value at a time. Every value is
+# explicit so the container's development environment variables cannot leak in.
+PRODUCTION: dict[str, Any] = {
+    "environment": "production",
+    "jwt_secret_key": "x" * 64,
+    "storage_access_key": "prod-access-key",
+    "storage_secret_key": "y" * 40,
+    "database_url": "postgresql+psycopg://orbit:" + "z" * 32 + "@postgres:5432/orbit_office",
+    "frontend_base_url": "https://office.example.com",
+    "seed_dev_password": None,
+    "cookie_secure": None,
+    "debug": False,
+    "log_json": None,
+    "rate_limit_fail_open": None,
+    "health_details_public": None,
+}
 
 
 def test_production_with_strong_secrets(settings_factory: Callable[..., Settings]) -> None:
-    settings = settings_factory(
-        environment="production",
-        jwt_secret_key="x" * 64,
-        storage_secret_key="y" * 40,
-        log_json=None,
-    )
+    settings = settings_factory(**PRODUCTION)
     assert settings.is_production
     assert settings.docs_enabled is False
     assert settings.use_json_logs is True
+    assert settings.secure_cookies is True
+    assert settings.rate_limit_fails_open is False
+    assert settings.health_details_visible is False
+
+
+def test_development_defaults_fail_open_and_show_health(
+    settings_factory: Callable[..., Settings],
+) -> None:
+    settings = settings_factory(
+        environment="development", rate_limit_fail_open=None, health_details_public=None
+    )
+    assert settings.rate_limit_fails_open is True
+    assert settings.health_details_visible is True
+
+
+@pytest.mark.parametrize(
+    ("override", "message"),
+    [
+        ({"jwt_secret_key": DEV_JWT_SECRET_PLACEHOLDER}, "JWT_SECRET_KEY"),
+        ({"jwt_secret_key": "short"}, "JWT_SECRET_KEY"),
+        ({"storage_secret_key": DEV_STORAGE_SECRET_PLACEHOLDER}, "STORAGE_SECRET_KEY"),
+        ({"storage_access_key": "orbit-minio"}, "STORAGE_ACCESS_KEY"),
+        (
+            {"database_url": "postgresql+psycopg://orbit:orbit_dev_password@db:5432/orbit_office"},
+            "DATABASE_URL",
+        ),
+        ({"cookie_secure": False}, "COOKIE_SECURE"),
+        ({"frontend_base_url": "http://office.example.com"}, "FRONTEND_BASE_URL"),
+        ({"seed_dev_password": "Some-Password-1"}, "SEED_DEV_PASSWORD"),
+        ({"debug": True}, "DEBUG"),
+    ],
+)
+def test_production_rejects_unsafe_values(
+    settings_factory: Callable[..., Settings], override: dict[str, Any], message: str
+) -> None:
+    with pytest.raises(ValidationError, match=message):
+        settings_factory(**{**PRODUCTION, **override})
 
 
 def test_chunk_overlap_must_be_smaller_than_chunk_size(

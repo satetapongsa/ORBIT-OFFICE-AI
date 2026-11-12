@@ -14,6 +14,7 @@ from app.models.vector import EMBEDDING_DIMENSIONS
 
 DEV_JWT_SECRET_PLACEHOLDER = "change-me-in-production-use-64-random-bytes"  # noqa: S105
 DEV_STORAGE_SECRET_PLACEHOLDER = "orbit-minio-dev-secret"  # noqa: S105
+DEV_DATABASE_PASSWORD = "orbit_dev_password"  # noqa: S105
 
 
 class Environment(StrEnum):
@@ -67,6 +68,13 @@ class Settings(BaseSettings):
     password_reset_ttl_minutes: int = Field(default=30, ge=5, le=1440)
     login_rate_limit_attempts: int = Field(default=10, ge=1)
     login_rate_limit_window_seconds: int = Field(default=900, ge=10)
+    # When Redis is unreachable: allow requests (fail open) or refuse them with 503.
+    # Default: open in development/test, closed in staging/production (ADR-049).
+    rate_limit_fail_open: bool | None = None
+    upload_rate_limit: int = Field(default=30, ge=1)  # uploads per user per window
+    upload_rate_limit_window_seconds: int = Field(default=600, ge=10)
+    export_rate_limit: int = Field(default=20, ge=1)  # report exports per user per window
+    export_rate_limit_window_seconds: int = Field(default=600, ge=10)
     frontend_base_url: str = "http://127.0.0.1:3000"  # used in password-reset links
     # Password for development seed accounts (`python -m app.cli seed-dev`). Never used in prod.
     seed_dev_password: SecretStr | None = None
@@ -137,6 +145,16 @@ class Settings(BaseSettings):
 
     # --- Health checks ---------------------------------------------------------------
     health_check_timeout_seconds: float = Field(default=3.0, gt=0)
+    # Component details in GET /health (default: shown outside production only). Monitoring
+    # can still read them in production with the header `X-Health-Token`.
+    health_details_public: bool | None = None
+    health_check_token: SecretStr | None = None
+
+    # --- Retention and clean-up (Phase 9, Celery beat + `python -m app.cli purge`) --
+    document_purge_after_days: int = Field(default=30, ge=1)  # after soft delete
+    storage_orphan_grace_hours: int = Field(default=24, ge=1)  # unreferenced objects
+    session_purge_after_days: int = Field(default=30, ge=1)  # after expiry/revocation
+    notification_retention_days: int = Field(default=365, ge=7)  # read notifications
 
     @field_validator("app_timezone")
     @classmethod
@@ -178,6 +196,17 @@ class Settings(BaseSettings):
         return self
 
     def _validate_production(self) -> None:
+        for name, value in (
+            ("JWT_SECRET_KEY", self.jwt_secret_key),
+            ("DATABASE_URL", self.database_url),
+            ("REDIS_URL", self.redis_url),
+            ("STORAGE_ACCESS_KEY", self.storage_access_key),
+            ("STORAGE_SECRET_KEY", self.storage_secret_key),
+        ):
+            if "CHANGE_ME" in value.get_secret_value():
+                raise ValueError(f"{name} still contains a CHANGE_ME placeholder")
+        if self.health_check_token and "CHANGE_ME" in self.health_check_token.get_secret_value():
+            raise ValueError("HEALTH_CHECK_TOKEN still contains a CHANGE_ME placeholder")
         secret = self.jwt_secret_key.get_secret_value()
         if secret == DEV_JWT_SECRET_PLACEHOLDER or len(secret) < 32:
             raise ValueError(
@@ -189,10 +218,34 @@ class Settings(BaseSettings):
             )
         if self.debug:
             raise ValueError("DEBUG must be false in production")
+        if f":{DEV_DATABASE_PASSWORD}@" in self.database_url.get_secret_value():
+            raise ValueError("DATABASE_URL must not use the development password in production")
+        if self.storage_access_key.get_secret_value() == "orbit-minio":
+            raise ValueError(
+                "STORAGE_ACCESS_KEY must not use the development default in production"
+            )
+        if self.cookie_secure is False:
+            raise ValueError("COOKIE_SECURE cannot be false in production (HTTPS only)")
+        if not self.frontend_base_url.startswith("https://"):
+            raise ValueError("FRONTEND_BASE_URL must be an https:// URL in production")
+        if self.seed_dev_password is not None:
+            raise ValueError("SEED_DEV_PASSWORD must not be set in production")
 
     @property
     def is_production(self) -> bool:
         return self.environment in (Environment.PRODUCTION, Environment.STAGING)
+
+    @property
+    def rate_limit_fails_open(self) -> bool:
+        if self.rate_limit_fail_open is not None:
+            return self.rate_limit_fail_open
+        return not self.is_production
+
+    @property
+    def health_details_visible(self) -> bool:
+        if self.health_details_public is not None:
+            return self.health_details_public
+        return not self.is_production
 
     @property
     def secure_cookies(self) -> bool:
