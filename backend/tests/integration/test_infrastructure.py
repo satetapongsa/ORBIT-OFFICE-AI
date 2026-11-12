@@ -2,7 +2,7 @@
 
 Run with the Compose stack up and migrations applied::
 
-    AURA_RUN_INTEGRATION=1 pytest -m integration
+    ORBIT_RUN_INTEGRATION=1 pytest -m integration
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from app.main import create_app
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(
-        os.environ.get("AURA_RUN_INTEGRATION") != "1",
-        reason="set AURA_RUN_INTEGRATION=1 with the Compose stack running",
+        os.environ.get("ORBIT_RUN_INTEGRATION") != "1",
+        reason="set ORBIT_RUN_INTEGRATION=1 with the Compose stack running",
     ),
 ]
 
@@ -57,7 +57,7 @@ def test_migrations_applied_and_pgvector_usable() -> None:
 
 def test_redis_set_get_round_trip() -> None:
     client = redis.Redis.from_url(Settings().redis_url.get_secret_value(), decode_responses=True)
-    key = f"aura:integration-test:{uuid.uuid4()}"
+    key = f"orbit:integration-test:{uuid.uuid4()}"
     try:
         assert client.set(key, "ทดสอบ", ex=30)
         assert client.get(key) == "ทดสอบ"
@@ -70,7 +70,7 @@ def test_object_storage_put_get_delete_round_trip() -> None:
     storage = ObjectStorage(Settings())
     storage.ensure_bucket()
     key = f"integration-tests/{uuid.uuid4()}.txt"
-    payload = "เอกสารทดสอบ AURA".encode() * 20_000  # several stream chunks
+    payload = "เอกสารทดสอบ ORBIT".encode() * 20_000  # several stream chunks
     storage.put_object(key, io.BytesIO(payload), content_type="text/plain", sha256="x")
     try:
         assert b"".join(storage.open_object(key)) == payload

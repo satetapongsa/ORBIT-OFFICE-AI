@@ -1,7 +1,7 @@
 """Shared pytest fixtures.
 
-Tests run against a dedicated database (``aura_office_test`` by default, or
-``AURA_TEST_DATABASE_URL``) that is created and migrated automatically, so the development
+Tests run against a dedicated database (``orbit_office_test`` by default, or
+``ORBIT_TEST_DATABASE_URL``) that is created and migrated automatically, so the development
 database is never touched. Tests that need PostgreSQL use the ``db`` fixture and are skipped
 with a clear reason when the server is unreachable.
 """
@@ -30,10 +30,10 @@ os.environ["DATABASE_USE_NULL_POOL"] = "true"  # every TestClient runs its own e
 os.environ["SMTP_HOST"] = ""
 
 _BASE_DB_URL = os.environ.get(
-    "DATABASE_URL", "postgresql+psycopg://aura:aura_dev_password@127.0.0.1:5432/aura_office"
+    "DATABASE_URL", "postgresql+psycopg://orbit:orbit_dev_password@127.0.0.1:5432/orbit_office"
 )
-TEST_DATABASE_URL = os.environ.get("AURA_TEST_DATABASE_URL") or make_url(_BASE_DB_URL).set(
-    database="aura_office_test"
+TEST_DATABASE_URL = os.environ.get("ORBIT_TEST_DATABASE_URL") or make_url(_BASE_DB_URL).set(
+    database="orbit_office_test"
 ).render_as_string(hide_password=False)
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
@@ -43,7 +43,7 @@ from app.core.rate_limit import InMemoryRateLimiter  # noqa: E402
 from app.core.security import CSRF_COOKIE, CSRF_HEADER, hash_password, utcnow  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-TEST_PASSWORD = "Test-Passw0rd-AURA!"  # used only for accounts created inside the test DB
+TEST_PASSWORD = "Test-Passw0rd-ORBIT!"  # used only for accounts created inside the test DB
 _TEST_PASSWORD_HASH = hash_password(TEST_PASSWORD)
 
 BACKEND_OPTIONS = {"loop_factory": selector_event_loop} if sys.platform == "win32" else {}

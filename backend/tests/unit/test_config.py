@@ -5,7 +5,7 @@ from collections.abc import Callable
 import pytest
 from pydantic import ValidationError
 
-from app.core.config import AIProvider, Settings
+from app.core.config import DEV_STORAGE_SECRET_PLACEHOLDER, AIProvider, Settings
 
 
 def test_defaults_are_development_safe(settings_factory: Callable[..., Settings]) -> None:
@@ -34,7 +34,11 @@ def test_production_rejects_default_storage_secret(
     settings_factory: Callable[..., Settings],
 ) -> None:
     with pytest.raises(ValidationError, match="STORAGE_SECRET_KEY"):
-        settings_factory(environment="production", jwt_secret_key="x" * 64)
+        settings_factory(
+            environment="production",
+            jwt_secret_key="x" * 64,
+            storage_secret_key=DEV_STORAGE_SECRET_PLACEHOLDER,
+        )
 
 
 def test_production_with_strong_secrets(settings_factory: Callable[..., Settings]) -> None:
@@ -74,4 +78,4 @@ def test_empty_env_values_are_treated_as_unset(monkeypatch: pytest.MonkeyPatch) 
 def test_secrets_not_exposed_in_repr(settings_factory: Callable[..., Settings]) -> None:
     settings = settings_factory(ai_chat_api_key="sk-test-should-not-leak")
     assert "sk-test-should-not-leak" not in repr(settings)
-    assert "aura_dev_password" not in repr(settings)
+    assert "orbit_dev_password" not in repr(settings)

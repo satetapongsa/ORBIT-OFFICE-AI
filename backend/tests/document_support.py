@@ -22,10 +22,10 @@ from app.services.documents.indexing import index_version
 from app.services.documents.processing import process_version
 from tests.conftest import make_settings
 
-THAI_TEXT = "นโยบายการลาพักร้อน AURA ปี 2569\nพนักงานลาได้ 10 วันต่อปี"
+THAI_TEXT = "นโยบายการลาพักร้อน ORBIT ปี 2569\nพนักงานลาได้ 10 วันต่อปี"
 
 
-def make_pdf(text: str = "AURA leave policy 2026", *more_pages: str) -> bytes:
+def make_pdf(text: str = "ORBIT leave policy 2026", *more_pages: str) -> bytes:
     """A minimal valid PDF with an ASCII text line per page."""
     pages = [text, *more_pages]
     kids = " ".join(f"{4 + 2 * i} 0 R" for i in range(len(pages)))

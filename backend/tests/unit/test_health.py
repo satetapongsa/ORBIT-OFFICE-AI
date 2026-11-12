@@ -41,7 +41,7 @@ def test_liveness_ok(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["service"] == "AURA OFFICE AI"
+    assert body["service"] == "ORBIT OFFICE AI"
 
 
 def test_liveness_sets_request_id_and_security_headers(client: TestClient) -> None:

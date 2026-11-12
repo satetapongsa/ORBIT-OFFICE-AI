@@ -24,7 +24,7 @@ from tests.conftest import Factory, make_settings, run
 
 AsUser = Callable[..., TestClient]
 PREFS = "/api/v1/notifications/preferences"
-MAIL_SETTINGS = {"smtp_host": "mail.example.com", "smtp_from": "AURA <no-reply@example.com>"}
+MAIL_SETTINGS = {"smtp_host": "mail.example.com", "smtp_from": "ORBIT <no-reply@example.com>"}
 
 
 @pytest.fixture
@@ -171,7 +171,7 @@ def test_delivery_respects_preferences_and_records_status(
 
     [message] = outbox
     assert message["to"] == "alice@example.com"
-    assert message["subject"] == "[AURA] หัวข้อ"
+    assert message["subject"] == "[ORBIT] หัวข้อ"
     assert "https://office.example.com/helpdesk/1" in message["text"]
     assert "https://office.example.com/account" in message["text"]
 

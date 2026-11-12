@@ -105,7 +105,7 @@ def test_upload_stores_file_and_extracts_text(env: Env, as_user: AsUser) -> None
 @pytest.mark.parametrize(
     ("name", "factory", "expected_type", "snippet"),
     [
-        ("policy.pdf", make_pdf, "PDF", "AURA leave policy 2026"),
+        ("policy.pdf", make_pdf, "PDF", "ORBIT leave policy 2026"),
         ("handbook.docx", make_docx, "DOCX", "บทที่ 1 การเข้างาน"),
         ("budget.xlsx", make_xlsx, "XLSX", "คอมพิวเตอร์\t12"),
         ("thai-windows.txt", lambda: THAI_TEXT.encode("cp874"), "TXT", "พนักงานลาได้"),

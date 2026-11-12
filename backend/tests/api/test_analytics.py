@@ -284,7 +284,7 @@ def test_xlsx_export_lists_only_visible_rows_and_blocks_formulas(org: Org) -> No
     assert response.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    assert "aura-report-department-" in response.headers["content-disposition"]
+    assert "orbit-report-department-" in response.headers["content-disposition"]
     assert response.headers["cache-control"] == "no-store"
 
     book = load_workbook(io.BytesIO(response.content))

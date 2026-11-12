@@ -160,7 +160,7 @@ def test_admin_changes_notify_the_affected_user_only(db: Factory, as_user: AsUse
             {"u": target_id},
         ).all()
     assert [r[0] for r in rows] == ["ACCOUNT", "ACCOUNT", "ACCOUNT"]
-    assert rows[0][1] == "ยินดีต้อนรับสู่ AURA OFFICE AI"
+    assert rows[0][1] == "ยินดีต้อนรับสู่ ORBIT OFFICE AI"
     assert "ผู้จัดการ" in rows[1][2]  # role name, not code
     assert "ตำแหน่ง" in rows[2][2]
     assert admin.get(BASE).json()["total"] == 0  # the actor is not notified
