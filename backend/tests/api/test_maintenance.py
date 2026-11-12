@@ -247,3 +247,29 @@ def test_import_skips_unsafe_entries() -> None:
     restored, skipped = import_objects(target, archive)  # type: ignore[arg-type]
     assert set(target.objects) == {"documents/ok.txt", "documents/dot.txt"}
     assert (restored, skipped) == (2, 5)
+
+
+def test_ticket_attachments_are_not_orphans(db: Factory) -> None:
+    owner = db.user("owner@example.com")
+    ticket = _sql(
+        db,
+        "INSERT INTO tickets (ticket_number, title, description, category, priority, status,"
+        " requester_id) VALUES ('IT-2026-999999', 't', 'd', 'OTHER', 'MEDIUM', 'OPEN', :u)"
+        " RETURNING id",
+        u=owner,
+    )
+    _sql(
+        db,
+        "INSERT INTO ticket_attachments (ticket_id, storage_key, original_filename, file_type,"
+        " mime_type, size_bytes, sha256, is_internal, uploaded_by) VALUES (:t, 'tickets/kept',"
+        " 'shot.png', 'PNG', 'image/png', 1, :h, false, :u)",
+        t=ticket,
+        h="0" * 64,
+        u=owner,
+    )
+    storage = FakeStorage()
+    storage.add("tickets/kept", age=timedelta(days=10))
+    storage.add("tickets/stale", age=timedelta(days=10))
+    report = _run(db, storage)
+    assert report.orphaned_objects == 1
+    assert set(storage.objects) == {"tickets/kept"}

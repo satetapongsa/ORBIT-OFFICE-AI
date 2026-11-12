@@ -160,7 +160,7 @@ def test_detailed_readiness_is_for_administrators(
 
 
 def test_upload_export_and_summary_routes_are_rate_limited() -> None:
-    from app.api.v1.endpoints import analytics, documents, tasks
+    from app.api.v1.endpoints import analytics, documents, tasks, tickets
 
     def guards(router: APIRouter, method: str, path: str) -> set[Any]:
         for route in router.routes:
@@ -171,6 +171,7 @@ def test_upload_export_and_summary_routes_are_rate_limited() -> None:
     assert limit_uploads in guards(documents.router, "POST", "/documents")
     assert limit_uploads in guards(documents.router, "POST", "/documents/{document_id}/versions")
     assert limit_uploads in guards(tasks.router, "POST", "/tasks/{task_id}/attachments")
+    assert limit_uploads in guards(tickets.router, "POST", "/tickets/{ticket_id}/attachments")
     for path in ("/reports/overview.xlsx", "/reports/overview.pdf"):
         assert limit_exports in guards(analytics.router, "GET", path)
     assert limit_ai_summaries in guards(analytics.router, "POST", "/analytics/summary")
