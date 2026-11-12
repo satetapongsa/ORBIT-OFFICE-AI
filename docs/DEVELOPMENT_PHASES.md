@@ -150,17 +150,20 @@ Acceptance criteria (verified 2026-11-12 — see `PROJECT_STATUS.md`)
 - [x] Answers include source references; insufficient evidence reported.
 - [x] Unauthorized chunks are never passed to the LLM; tests verify cross-permission isolation.
 
-## Phase 8 — Helpdesk, notifications & analytics ⬜
+## Phase 8 — Helpdesk, notifications & analytics ✅
 
 IT tickets (create, assign, status, public/internal comments, history),
 task/ticket/document notifications on top of the Phase 3 inbox (preferences, e-mail), analytics APIs, reports, PDF and Excel
 export, AI report summaries.
 
+Also delivered: assistant tools `get_my_tickets` and confirmed `create_ticket` (ADR-039),
+role/permission editor on `/settings` (deferred from Phase 5). Migration `0008`, ADR-044…048.
+
 Acceptance criteria
-- Employees submit tickets; IT Support manages authorized tickets.
-- Notifications persisted.
-- Reports use real data and respect permissions; export works.
-- Tests cover the complete workflows.
+- [x] Employees submit tickets; IT Support manages authorized tickets.
+- [x] Notifications persisted (+ per-type e-mail preferences, e-mail after commit).
+- [x] Reports use real data and respect permissions; export works (Excel, PDF with Thai fonts).
+- [x] Tests cover the complete workflows.
 
 ## Phase 9 — Security, testing & deployment ⬜
 

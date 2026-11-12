@@ -225,13 +225,33 @@
   overlap after a paragraph cut, and passages could straddle PDF pages → overlap starts at a
   line inside real content and never crosses a page break.
 
+### Phase 8 — Helpdesk, Notifications & Analytics
+- **Data model** (migration `0008`): `tickets` (sequence numbers `IT-2026-000001`),
+  `ticket_comments`, `ticket_events` (both with `is_internal`), `notification_preferences`,
+  notification type `TICKET`, `email_status`/`emailed_at`.
+- **Helpdesk** (ADR-044): `/tickets` API (list with scopes mine/assigned/unassigned/all,
+  filters, search; detail with capabilities; status; assignee; category/priority; comments
+  incl. internal notes; history; IT assignee list). Notifications to dispatchers, assignee and
+  requester. Assistant tools `get_my_tickets` and `create_ticket` (confirmed, ADR-039).
+- **E-mail** (ADR-045): SMTP sender, worker task `notifications.send_emails` after commit,
+  per-type preferences API + card on "บัญชีของฉัน", password-reset links by e-mail, Mailpit
+  in Docker.
+- **Analytics & reports** (ADR-046/047): `GET /analytics/overview`, `POST /analytics/summary`
+  (AI, numbers only), `GET /reports/overview.xlsx|pdf` (audited). Page `/analytics`: scope tabs,
+  periods, KPI cards, daily charts, breakdowns, workload table, exports, AI summary.
+- **Settings** (ADR-048): `/settings` role list and permission editor (create/rename/delete
+  custom roles, grant only what you hold, ADMIN locked).
+- **Frontend**: `/helpdesk`, `/helpdesk/[id]` (requester actions in plain language, IT status
+  / assignee / category / priority controls, internal notes highlighted), all modules enabled
+  in the navigation (`CURRENT_PHASE = 8`).
+
 ## In Progress
-- Nothing. Phase 7 is complete.
+- Nothing. Phase 8 is complete.
 
 ## Remaining
-- Phases 8–9 per `docs/DEVELOPMENT_PHASES.md`.
-- Role/permission editing UI and system settings (`/settings`) — Phase 8 (APIs exist).
-- E-mail delivery for password-reset links (needs a mail provider/SMTP decision).
+- Phase 9 per `docs/DEVELOPMENT_PHASES.md` (security review, purge jobs, backups, HTTPS,
+  production deployment).
+- Ticket attachments, due-date reminders and system settings beyond roles (not built).
 
 ## Technical Decisions
 See `docs/DECISIONS.md`. Key ones: same-origin API via proxy (ADR-002); psycopg 3 for async and
@@ -252,9 +272,35 @@ business-day due dates (ADR-036); AI provider adapters (ADR-037); AI tools run a
 changes need confirmation (ADR-038); ticket tools deferred to Phase 8 (ADR-039); chat streaming
 over server-sent events (ADR-040); retrieval with the ACL in SQL and hybrid ranking (ADR-041);
 fixed 1024-dimension embeddings and re-indexing (ADR-042); RAG through tools with citations
-(ADR-043).
+(ADR-043); helpdesk visibility and internal notes (ADR-044); e-mail after commit with
+preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF exports
+(ADR-047); role editor on `/settings` (ADR-048).
 
 ## Tests
+### Phase 8 verification — 2026-11-12
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (125 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **288 passed**, 1 skipped (Windows-only) |
+| — `tests/api/test_tickets.py` | ✅ 14: numbering, dispatcher notifications, audit, requester-only visibility (404), IT scopes/filters/search, assignment rules, status transitions by role, internal notes hidden + not notified, requester reply resumes waiting ticket, IT-only category/priority, validation |
+| — `tests/api/test_notification_email.py` | ✅ 8: preferences defaults/update/per-user/validation, queue only after commit (not on rollback), API events queue mail, delivery SENT/SKIPPED/FAILED + idempotent, no SMTP → skipped, SMTP STARTTLS/login, reset link by e-mail |
+| — `tests/api/test_analytics.py` | ✅ 11: own/department/all metrics, scope permissions, period selection + validation, export permissions, Excel rows limited to visible records + formula guard + audit, PDF with embedded Thai font, AI summary (numbers only, 503 without a model) |
+| — `tests/api/test_ai.py` | ✅ +3: `get_my_tickets` returns only my tickets, `create_ticket` only after confirmation, ticket tools follow permissions |
+| `alembic check` / `downgrade 0007` + `upgrade` (**test** DB) | ✅ `0008 (head)`, no drift, round trip ok |
+| Frontend `vitest` | ✅ **88 passed** (new: helpdesk list/create/detail for requester and IT, analytics scopes/periods/exports/summary, role editor, e-mail preferences, navigation) |
+| Frontend lint, typecheck, Prettier | ✅ |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Browser (Docker stack, real worker, Mailpit) | ✅ employee reported "เครื่องพิมพ์ชั้น 3 พิมพ์ไม่ออก" → `IT-2026-000001`; Mailpit received the e-mails for IT and admin; IT assigned it (auto "กำลังดำเนินการ"), added an internal note (no e-mail) and a reply, resolved it; the requester got both e-mails, did not see the internal note or its history entry, and confirmed the fix ("ปิดเรื่อง"); manager `/analytics` department scope with Excel/PDF downloads (200) and 403 for `scope=all`; admin `/settings` permission editor |
+
+### Phase 8 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Employees submit tickets; IT Support manages authorized tickets | ✅ API + UI + assistant tool; tests + browser |
+| Notifications persisted | ✅ in-app + e-mail after commit with preferences; tests + Mailpit |
+| Reports use real data and respect permissions; export works | ✅ SQL aggregates per scope, visible-rows-only exports, Excel + Thai PDF; tests + browser |
+| Tests cover the complete workflows | ✅ backend 288, frontend 88 |
+
 ### Phase 7 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
@@ -477,13 +523,14 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
    `DLL load failed ... An Application Control policy has blocked this file` for compiled wheels
    (SQLAlchemy). Not bypassed. Backend commands run in the container
    (`CHECK_BACKEND_IN_DOCKER=1 scripts/check.sh`, `docker compose exec backend …`).
-2. Password-reset e-mails are not delivered yet (no mail provider). In development the link is
-   written to the backend log; elsewhere a warning is logged. Needs an SMTP/provider decision.
+2. Password-reset e-mails go through SMTP when configured (Mailpit in Docker); with
+   `SMTP_HOST` empty the link is logged in development only. No production mail provider is
+   chosen yet (Phase 9).
 3. Login rate limiter fails open if Redis is unavailable (logged); review in Phase 9.
 4. Object storage uses a third-party MinIO build (`pgsty/minio`, digest-pinned) — ADR-013.
 5. Readiness endpoint is unauthenticated and lists component status; review in Phase 9.
-6. User/role/department management has APIs but no admin UI yet ("ตั้งค่า" shows "เร็วๆ นี้"
-   for admins); planned with Phase 5.
+6. Users and departments are managed in the Employee Center, roles on `/settings`; other system
+   settings (AI provider, SMTP) are configured through `.env` only.
 7. The session gate is client-side (pages render after `/auth/me`); every API call is still
    authorised by the backend. Server-side gating can be added with `proxy.ts` later (ADR-021).
 8. Next.js dev server writes `frontend/AGENTS.md`; ignored by the global git excludes.
@@ -493,7 +540,8 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 11. Dashboard aggregates are computed per request without caching (fine at current scale;
     revisit with analytics in Phase 8). Dark mode is not wired (no theme provider), so only
     the light chart palette is in use.
-12. Notifications are in-app only (no e-mail) and have no per-user preferences yet (Phase 8).
+12. E-mail is plain text and per type only (no digest, no quiet hours); failed sends are not
+    retried automatically (status `FAILED`).
 13. No OCR: scanned (image-only) PDFs finish `READY` with 0 characters; the UI says so.
 14. Objects of soft-deleted documents stay in storage; a purge job is planned for Phase 9.
 15. Uploads are not scanned by an antivirus engine (type sniffing and zip checks only).
@@ -503,16 +551,15 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 18. Task attachments accept the document formats only (PDF, DOCX, XLSX, TXT) — no images yet.
 19. Objects of removed task attachments are deleted after the DB commit; a storage failure at
     that moment leaves an orphaned object (logged). Purge job: Phase 9.
-20. Notifications for tasks are in-app only; there are no due-date reminders yet (Phase 8).
-21. Role/permission editing and `/settings` are not built yet (Phase 8); roles are assigned
-    from the Employee Center.
+20. There are no due-date reminders for tasks yet.
+21. Tickets have no attachments yet (the DB design lists `ticket_attachments`).
 22. The assistant has not been run against a live model here (no Ollama or API key on this
     machine); adapters are tested against their wire formats and the full stack against a
     scripted stub. The Anthropic refusal-fallback beta is untested against the live API.
 23. Chat retention (`AI_CHAT_RETENTION_DAYS`) has no purge job yet (Phase 9); deleted chats are
     soft-deleted.
-24. The assistant cannot search documents or company knowledge yet (Phase 7 RAG) and has no
-    ticket tools yet (Phase 8, ADR-039).
+24. Analytics are computed per request (no caching or materialised views); fine at current
+    scale. The AI summary has only been tested with a scripted model.
 25. Small local models may call tools poorly; choose a model with tool-calling support.
 26. Retrieval quality has only been checked with deterministic test embeddings and a stub; real
     relevance depends on the embedding model (recommended `bge-m3`, 1024 dimensions) and is
@@ -523,9 +570,13 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
     cover only the beginning (the model is told to say so).
 29. The embedding provider receives document text during indexing; use a local provider if
     documents must not leave your servers.
+30. The backend image now includes Pango and Thai fonts for PDF reports (larger image); rebuild
+    after pulling (`docker compose up -d --build backend worker`).
+31. Department analytics count tickets by the requester's current department; moving a person
+    moves their past tickets in the figures.
 
 ## Next Phase
-**Phase 8 — Helpdesk, Notifications & Analytics** (+ ticket tools for the assistant, role/permission editing UI): see `docs/DEVELOPMENT_PHASES.md`.
+**Phase 9 — Security, Testing & Deployment**: see `docs/DEVELOPMENT_PHASES.md`.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -538,7 +589,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 8 — HELPDESK, NOTIFICATIONS & ANALYTICS as defined in docs/DEVELOPMENT_PHASES.md.
+Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 9 — SECURITY, TESTING & DEPLOYMENT as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)
