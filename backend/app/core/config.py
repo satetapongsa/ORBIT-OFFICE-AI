@@ -150,6 +150,12 @@ class Settings(BaseSettings):
     health_details_public: bool | None = None
     health_check_token: SecretStr | None = None
 
+    # --- Hosted front end (Vercel) in front of a separately hosted API (ADR-055) -----
+    # When set, every API request except the liveness probe must carry this value in the
+    # `X-Orbit-Proxy-Secret` header (added by the front end's proxy), so the API cannot be
+    # called around it and the client IP it reports can be trusted.
+    proxy_shared_secret: SecretStr | None = None
+
     # --- Retention and clean-up (Phase 9, Celery beat + `python -m app.cli purge`) --
     document_purge_after_days: int = Field(default=30, ge=1)  # after soft delete
     storage_orphan_grace_hours: int = Field(default=24, ge=1)  # unreferenced objects
@@ -164,6 +170,22 @@ class Settings(BaseSettings):
         except (ZoneInfoNotFoundError, ValueError):
             raise ValueError(f"APP_TIMEZONE {value!r} is not a valid IANA time zone") from None
         return value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _psycopg_driver(cls, value: object) -> object:
+        """Hosted databases hand out `postgres://` or `postgresql://`; the app uses psycopg 3."""
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if isinstance(raw, str):
+            for prefix in ("postgres://", "postgresql://"):
+                if raw.startswith(prefix):
+                    return SecretStr("postgresql+psycopg://" + raw[len(prefix) :])
+        return value
+
+    @field_validator("proxy_shared_secret", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -207,6 +229,12 @@ class Settings(BaseSettings):
                 raise ValueError(f"{name} still contains a CHANGE_ME placeholder")
         if self.health_check_token and "CHANGE_ME" in self.health_check_token.get_secret_value():
             raise ValueError("HEALTH_CHECK_TOKEN still contains a CHANGE_ME placeholder")
+        if self.proxy_shared_secret is not None:
+            proxy_secret = self.proxy_shared_secret.get_secret_value()
+            if "CHANGE_ME" in proxy_secret or len(proxy_secret) < 32:
+                raise ValueError(
+                    "PROXY_SHARED_SECRET must be a strong random value (>= 32 chars) in production"
+                )
         secret = self.jwt_secret_key.get_secret_value()
         if secret == DEV_JWT_SECRET_PLACEHOLDER or len(secret) < 32:
             raise ValueError(

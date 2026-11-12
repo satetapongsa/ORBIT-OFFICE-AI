@@ -16,7 +16,11 @@ from app.core.db import dispose_engines
 from app.core.errors import register_exception_handlers
 from app.core.event_loop import is_unsupported_windows_loop
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
+from app.core.middleware import (
+    RequestContextMiddleware,
+    TrustedProxyMiddleware,
+    UploadSizeLimitMiddleware,
+)
 from app.core.notifications import build_reset_notifier
 from app.core.rate_limit import RedisRateLimiter
 from app.core.redis import close_redis, get_redis
@@ -101,6 +105,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             f"{API_PREFIX}/tickets",
         ),
     )
+    if settings.proxy_shared_secret is not None:
+        app.add_middleware(
+            TrustedProxyMiddleware, secret=settings.proxy_shared_secret.get_secret_value()
+        )
     # Added last so it is the outermost middleware and wraps everything above.
     app.add_middleware(RequestContextMiddleware)
 

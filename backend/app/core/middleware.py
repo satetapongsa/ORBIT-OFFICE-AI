@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import time
 
 import structlog
@@ -66,6 +68,9 @@ class RequestContextMiddleware:
                 path = scope.get("path", "")
                 if "Content-Security-Policy" not in headers and not path.startswith(_DOCS_PREFIXES):
                     headers.append("Content-Security-Policy", _API_CSP)
+                # API data is per user: no shared cache (CDN, proxy) may keep a copy.
+                if "Cache-Control" not in headers:
+                    headers.append("Cache-Control", "no-store")
             await send(message)
 
         try:
@@ -81,6 +86,65 @@ class RequestContextMiddleware:
                 status_code=status_code,
                 duration_ms=duration_ms,
             )
+
+
+PROXY_SECRET_HEADER = b"x-orbit-proxy-secret"
+# Set by Vercel's edge to the visitor's IP; clients cannot supply their own (ADR-055).
+_PROXY_CLIENT_IP_HEADER = b"x-vercel-forwarded-for"
+_PROXY_EXEMPT_PATHS = frozenset({"/api/v1/health/live"})  # the host platform's probe
+
+
+class TrustedProxyMiddleware:
+    """Accepts API requests only through the front end's proxy (ADR-055).
+
+    The proxy adds a shared secret header; requests without it get 403, so the API cannot be
+    called directly to dodge the per-IP login limit with a forged ``X-Forwarded-For``. On
+    accepted requests the secret is removed from the headers (it never reaches handlers or
+    logs) and the client address becomes the visitor IP reported by the proxy."""
+
+    def __init__(self, app: ASGIApp, *, secret: str) -> None:
+        self.app = app
+        self.secret = secret.encode()
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope.get("path", "") in _PROXY_EXEMPT_PATHS:
+            await self.app(scope, receive, send)
+            return
+
+        supplied = b""
+        client_ip: str | None = None
+        kept: list[tuple[bytes, bytes]] = []
+        for key, value in scope.get("headers", []):
+            if key == PROXY_SECRET_HEADER:
+                supplied = value
+                continue
+            if key == _PROXY_CLIENT_IP_HEADER and client_ip is None:
+                client_ip = _first_ip(value)
+            kept.append((key, value))
+
+        if not hmac.compare_digest(supplied, self.secret):
+            from app.core.errors import AppError, error_response
+
+            error = AppError("กรุณาใช้งานผ่านหน้าเว็บของระบบ")
+            error.status_code = 403
+            error.code = "proxy_required"
+            await error_response(error)(scope, receive, send)
+            return
+
+        scope = dict(scope)
+        scope["headers"] = kept
+        if client_ip is not None:
+            port = scope["client"][1] if scope.get("client") else 0
+            scope["client"] = (client_ip, port)
+        await self.app(scope, receive, send)
+
+
+def _first_ip(value: bytes) -> str | None:
+    first = value.decode("latin-1").split(",")[0].strip()
+    try:
+        return str(ipaddress.ip_address(first))
+    except ValueError:
+        return None
 
 
 class UploadSizeLimitMiddleware:
