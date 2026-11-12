@@ -1,0 +1,72 @@
+# ORBIT OFFICE AI — Render Blueprint for the API side on Render's free plan
+# (docs/DEPLOYMENT.md section 11, ADR-056). The front end stays on Vercel.
+#
+# Free web services cannot run separate background workers, so one container runs the API,
+# the Celery worker and the daily clean-up schedule (`-B`). The database is Neon (free,
+# PostgreSQL with pgvector) because Render's free PostgreSQL is deleted after 30 days, and
+# files go to Cloudflare R2 (S3-compatible). Values marked `sync: false` are asked for once
+# when the Blueprint is applied.
+
+services:
+  - type: web
+    name: orbit-office-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./infra/docker/backend.Dockerfile
+    dockerContext: .
+    # Migrations, permissions and bucket check, then the API and the worker side by side; if
+    # either stops, the container exits and Render restarts it.
+    dockerCommand: python -m app.serve_all
+    healthCheckPath: /api/v1/health/live
+    autoDeployTrigger: commit
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: APP_TIMEZONE
+        value: Asia/Bangkok
+      - key: LOG_LEVEL
+        value: INFO
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: HEALTH_CHECK_TOKEN
+        generateValue: true
+      # Copy this generated value into the Vercel project as PROXY_SHARED_SECRET.
+      - key: PROXY_SHARED_SECRET
+        generateValue: true
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: orbit-office-redis
+          property: connectionString
+      # Neon connection string (postgresql://...?sslmode=require).
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_SIZE
+        value: "3"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "2"
+      # The Vercel address, e.g. https://orbit-office-ai.vercel.app (password-reset links).
+      - key: FRONTEND_BASE_URL
+        sync: false
+      # Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com
+      - key: STORAGE_ENDPOINT_URL
+        sync: false
+      - key: STORAGE_ACCESS_KEY
+        sync: false
+      - key: STORAGE_SECRET_KEY
+        sync: false
+      - key: STORAGE_BUCKET
+        value: orbit-documents
+      - key: STORAGE_REGION
+        value: auto
+      - key: STORAGE_AUTO_CREATE_BUCKET
+        value: "false"
+
+  - type: keyvalue
+    name: orbit-office-redis
+    plan: free
+    region: singapore
+    # Celery's queue must never be evicted; internal connections only.
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
