@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { TicketAttachmentsCard } from "@/features/helpdesk/components/ticket-attachments";
 import { TicketStatusBadge } from "@/features/helpdesk/components/ticket-badges";
 import {
   useAddTicketComment,
@@ -384,6 +385,10 @@ function describeEvent(event: TicketEvent): string {
       return `${label} ${event.from_value ?? ""}`.trim();
     case "COMMENTED":
       return event.is_internal ? "เพิ่มบันทึกภายใน" : label;
+    case "ATTACHMENT_ADDED":
+      return `${event.is_internal ? "แนบไฟล์ภายใน" : label} ${event.to_value ?? ""}`.trim();
+    case "ATTACHMENT_REMOVED":
+      return `${label} ${event.from_value ?? ""}`.trim();
     default:
       return label;
   }
@@ -498,6 +503,7 @@ export function TicketDetailView({ id }: { id: string }) {
         </div>
         <div className="space-y-4">
           <DetailsCard ticket={t} />
+          <TicketAttachmentsCard ticket={t} />
           <HistoryCard ticketId={t.id} />
         </div>
       </div>
