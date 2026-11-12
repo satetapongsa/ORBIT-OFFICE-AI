@@ -18,7 +18,12 @@ _SECURITY_HEADERS = {
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
 }
+# API responses are data, never pages: nothing may load, run or frame them. The interactive
+# API docs (development only) load Swagger UI from a CDN, so they are left out.
+_API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+_DOCS_PREFIXES = ("/api/docs", "/api/redoc", "/api/openapi.json")
 
 # Health probes are polled frequently; keep them out of the access log at INFO.
 _QUIET_PATHS = frozenset({"/api/v1/health/live"})
@@ -58,6 +63,9 @@ class RequestContextMiddleware:
                 for name, value in _SECURITY_HEADERS.items():
                     if name not in headers:
                         headers.append(name, value)
+                path = scope.get("path", "")
+                if "Content-Security-Policy" not in headers and not path.startswith(_DOCS_PREFIXES):
+                    headers.append("Content-Security-Policy", _API_CSP)
             await send(message)
 
         try:
