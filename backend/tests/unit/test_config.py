@@ -46,6 +46,7 @@ PRODUCTION: dict[str, Any] = {
     "log_json": None,
     "rate_limit_fail_open": None,
     "health_details_public": None,
+    "proxy_shared_secret": None,
 }
 
 
@@ -84,6 +85,8 @@ def test_development_defaults_fail_open_and_show_health(
         ({"frontend_base_url": "http://office.example.com"}, "FRONTEND_BASE_URL"),
         ({"seed_dev_password": "Some-Password-1"}, "SEED_DEV_PASSWORD"),
         ({"debug": True}, "DEBUG"),
+        ({"proxy_shared_secret": "too-short"}, "PROXY_SHARED_SECRET"),
+        ({"proxy_shared_secret": "CHANGE_ME" + "x" * 40}, "PROXY_SHARED_SECRET"),
     ],
 )
 def test_production_rejects_unsafe_values(
@@ -91,6 +94,21 @@ def test_production_rejects_unsafe_values(
 ) -> None:
     with pytest.raises(ValidationError, match=message):
         settings_factory(**{**PRODUCTION, **override})
+
+
+@pytest.mark.parametrize("scheme", ["postgres://", "postgresql://", "postgresql+psycopg://"])
+def test_hosted_database_urls_use_psycopg(
+    settings_factory: Callable[..., Settings], scheme: str
+) -> None:
+    settings = settings_factory(database_url=f"{scheme}u:p@db.example.com:5432/app")
+    assert settings.sync_database_url == "postgresql+psycopg://u:p@db.example.com:5432/app"
+
+
+def test_production_accepts_a_strong_proxy_secret(
+    settings_factory: Callable[..., Settings],
+) -> None:
+    settings = settings_factory(**{**PRODUCTION, "proxy_shared_secret": "p" * 48})
+    assert settings.proxy_shared_secret is not None
 
 
 def test_chunk_overlap_must_be_smaller_than_chunk_size(
