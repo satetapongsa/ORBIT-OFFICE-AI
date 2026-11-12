@@ -151,4 +151,84 @@ Recovery point = the last backup; recovery time ≈ minutes per GB of files.
    `FAILED` and not retried.
 8. Backups are only as good as their off-site copy and the last restore test.
 9. Rate limits and the readiness policy assume Nginx is the only way in; do not publish the
-   backend port. Behind another load balancer configure `set_real_ip_from`.
+   backend port. Behind another load balancer configure `set_real_ip_from`. With the front end
+   on Vercel (section 9) set `PROXY_SHARED_SECRET` instead.
+
+## 9. Alternative: front end on Vercel, API on Railway (ADR-055)
+
+The Next.js front end can run on Vercel while the API, worker, scheduler, database, Redis and
+file storage run elsewhere. The steps below use [Railway](https://railway.com) for the API side
+and Cloudflare R2 (or Railway Buckets) for files; any host that runs Docker images works the
+same way. Vercel keeps proxying `/api/*` to the API, so the browser still talks to one origin
+and the session cookies keep working unchanged.
+
+### 9.1 Railway project
+
+Create one project with these services:
+
+| Service | Source | Settings |
+| --- | --- | --- |
+| `Postgres` | Railway **pgvector** template (PostgreSQL with the `vector` extension) | — |
+| `Redis` | Railway Redis | — |
+| `backend` | this GitHub repo | Dockerfile path `infra/docker/backend.Dockerfile` · pre-deploy command `sh -c "alembic upgrade head && python -m app.cli sync-rbac && python -m app.cli ensure-bucket"` · healthcheck path `/api/v1/health/live` · public domain on port `8000` |
+| `worker` | same repo, same Dockerfile | start command `celery -A app.workers.celery_app worker --loglevel=INFO -Q default,documents --concurrency=2` · no public domain |
+| `beat` | same repo, same Dockerfile | start command `celery -A app.workers.celery_app beat --loglevel=INFO` · no public domain · one replica only |
+
+Shared variables (Project → Variables, referenced by `backend`, `worker` and `beat`):
+
+```
+ENVIRONMENT=production
+DATABASE_URL=${{Postgres.DATABASE_URL}}      # postgres:// is switched to psycopg automatically
+REDIS_URL=${{Redis.REDIS_URL}}
+JWT_SECRET_KEY=<openssl rand -hex 32>
+PROXY_SHARED_SECRET=<openssl rand -hex 32>   # the same value goes to Vercel
+FRONTEND_BASE_URL=https://<your-project>.vercel.app
+STORAGE_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+STORAGE_REGION=auto
+STORAGE_ACCESS_KEY=<R2 access key id>
+STORAGE_SECRET_KEY=<R2 secret access key>
+STORAGE_BUCKET=orbit-documents
+STORAGE_AUTO_CREATE_BUCKET=false
+HEALTH_CHECK_TOKEN=<openssl rand -hex 32>
+APP_TIMEZONE=Asia/Bangkok
+```
+
+Add SMTP and AI variables from `.env.production.example` when needed. Create the R2 bucket
+first and give the access key read/write on that bucket only.
+
+### 9.2 Vercel project
+
+Root directory `frontend`, framework preset Next.js. Environment variables (Production):
+
+```
+BACKEND_INTERNAL_URL=https://<backend>.up.railway.app
+PROXY_SHARED_SECRET=<the same value as on Railway>
+```
+
+Redeploy after changing them: the `/api` rewrite target is fixed at build time.
+`frontend/vercel.json` adds the secret to every proxied `/api` request; with
+`PROXY_SHARED_SECRET` set, the API refuses requests without it (`403 proxy_required`), so it
+cannot be called around Vercel, and the visitor IP for login rate limits and the audit log
+comes from Vercel's `X-Vercel-Forwarded-For`.
+
+### 9.3 First administrator and checks
+
+Open a shell in the `backend` service (`railway ssh` or the dashboard) and run:
+
+```
+python -m app.cli create-admin admin@company.com Firstname Lastname
+```
+
+Then check, in this order: `https://<backend>.up.railway.app/api/v1/health/live` returns
+`ok`; `/api/v1/health` called directly returns `403 proxy_required` (the API is closed to
+direct calls); the Vercel site shows the sign-in page, you can sign in, upload a document
+and see it become searchable (worker), and download it.
+
+### 9.4 Limits of this layout
+
+1. Uploads and the assistant's streamed answers pass through Vercel's proxy; check a 25 MB
+   upload and a long answer after the first deploy.
+2. Backups: `scripts/backup.sh` targets the Compose stack. Use Railway's Postgres backups
+   and R2's bucket tools (or `python -m app.cli storage-export` from the backend shell).
+3. Vercel's Hobby plan is for non-commercial use; company use needs Pro.
+4. Two providers to watch: Vercel for pages, Railway for everything else.
