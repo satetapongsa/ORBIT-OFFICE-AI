@@ -32,7 +32,7 @@ class RateLimiter(Protocol):
 
 
 class RedisRateLimiter:
-    def __init__(self, redis: Redis, prefix: str = "aura:ratelimit:") -> None:
+    def __init__(self, redis: Redis, prefix: str = "orbit:ratelimit:") -> None:
         self._redis = redis
         self._prefix = prefix
 

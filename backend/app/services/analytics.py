@@ -198,7 +198,7 @@ async def overview(
 # --- AI summary ---------------------------------------------------------------------------
 
 SUMMARY_SYSTEM = (
-    "You are an analyst for AURA OFFICE AI. Write a short management summary in Thai of the "
+    "You are an analyst for ORBIT OFFICE AI. Write a short management summary in Thai of the "
     "statistics the user provides: 4-7 bullet points covering workload, overdue tasks, IT "
     "tickets and documents, then 1-3 concrete suggestions. Use only the numbers given; never "
     "invent figures, names or causes. If the data is too small to conclude anything, say so. "

@@ -16,7 +16,7 @@ from app.core.logging import configure_logging
 settings = get_settings()
 
 celery_app = Celery(
-    "aura_office",
+    "orbit_office",
     broker=settings.broker_url,
     backend=settings.result_backend_url,
     include=["app.workers.tasks"],

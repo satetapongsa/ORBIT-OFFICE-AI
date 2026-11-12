@@ -16,9 +16,9 @@ from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatc
 
 from app.core.config import Settings
 
-ACCESS_COOKIE = "aura_access"
-REFRESH_COOKIE = "aura_refresh"
-CSRF_COOKIE = "aura_csrf"
+ACCESS_COOKIE = "orbit_access"
+REFRESH_COOKIE = "orbit_refresh"
+CSRF_COOKIE = "orbit_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 ACCESS_COOKIE_PATH = "/api"
 REFRESH_COOKIE_PATH = "/api/v1/auth"

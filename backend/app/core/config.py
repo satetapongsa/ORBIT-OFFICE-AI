@@ -13,7 +13,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from app.models.vector import EMBEDDING_DIMENSIONS
 
 DEV_JWT_SECRET_PLACEHOLDER = "change-me-in-production-use-64-random-bytes"  # noqa: S105
-DEV_STORAGE_SECRET_PLACEHOLDER = "aura-minio-dev-secret"  # noqa: S105
+DEV_STORAGE_SECRET_PLACEHOLDER = "orbit-minio-dev-secret"  # noqa: S105
 
 
 class Environment(StrEnum):
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     )
 
     # --- Application -----------------------------------------------------------------
-    app_name: str = "AURA OFFICE AI"
+    app_name: str = "ORBIT OFFICE AI"
     environment: Environment = Environment.DEVELOPMENT
     debug: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     # --- Security / authentication ---------------------------------------------------
     jwt_secret_key: SecretStr = SecretStr(DEV_JWT_SECRET_PLACEHOLDER)
-    jwt_issuer: str = "aura-office-ai"
+    jwt_issuer: str = "orbit-office-ai"
     access_token_ttl_minutes: int = Field(default=15, ge=1, le=120)
     refresh_token_ttl_days: int = Field(default=7, ge=1, le=90)  # idle lifetime
     refresh_token_absolute_days: int = Field(default=30, ge=1, le=365)  # hard cap per login
@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     # --- PostgreSQL ------------------------------------------------------------------
     database_url: SecretStr = SecretStr(
-        "postgresql+psycopg://aura:aura_dev_password@127.0.0.1:5432/aura_office"
+        "postgresql+psycopg://orbit:orbit_dev_password@127.0.0.1:5432/orbit_office"
     )
     database_pool_size: int = Field(default=10, ge=1)
     database_max_overflow: int = Field(default=10, ge=0)
@@ -89,9 +89,9 @@ class Settings(BaseSettings):
     # --- Object storage (S3-compatible; MinIO locally) -------------------------------
     storage_endpoint_url: str | None = "http://127.0.0.1:9000"  # None = AWS S3 default
     storage_region: str = "us-east-1"
-    storage_access_key: SecretStr = SecretStr("aura-minio")
+    storage_access_key: SecretStr = SecretStr("orbit-minio")
     storage_secret_key: SecretStr = SecretStr(DEV_STORAGE_SECRET_PLACEHOLDER)
-    storage_bucket: str = "aura-documents"
+    storage_bucket: str = "orbit-documents"
     storage_auto_create_bucket: bool = True  # convenience for local development only
 
     # --- Uploads (used from Phase 4) -------------------------------------------------
@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
-    smtp_from: str = "AURA OFFICE AI <no-reply@aura.example.com>"
+    smtp_from: str = "ORBIT OFFICE AI <no-reply@orbit.example.com>"
     smtp_starttls: bool = True
     smtp_ssl: bool = False
 

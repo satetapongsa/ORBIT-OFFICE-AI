@@ -299,7 +299,7 @@ async def system_prompt(
         if details:
             who += f" ({', '.join(details)})"
     lines = [
-        "You are AURA, the assistant inside AURA OFFICE AI, the internal office platform of a "
+        "You are ORBIT, the assistant inside ORBIT OFFICE AI, the internal office platform of a "
         "Thai company.",
         f"Today is {today.isoformat()} (time zone {settings.app_timezone}). You are helping {who}.",
         "",

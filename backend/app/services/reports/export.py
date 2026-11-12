@@ -153,11 +153,11 @@ def _title(o: AnalyticsOverview) -> str:
     where = analytics.SCOPE_LABELS[o.scope]
     if o.department is not None:
         where += f" ({o.department.name})"
-    return f"รายงานภาพรวม AURA OFFICE AI — {where}"
+    return f"รายงานภาพรวม ORBIT OFFICE AI — {where}"
 
 
 def filename(o: AnalyticsOverview, ext: str) -> str:
-    return f"aura-report-{o.scope}-{o.date_from.isoformat()}-{o.date_to.isoformat()}.{ext}"
+    return f"orbit-report-{o.scope}-{o.date_from.isoformat()}-{o.date_to.isoformat()}.{ext}"
 
 
 # --- Excel --------------------------------------------------------------------------------

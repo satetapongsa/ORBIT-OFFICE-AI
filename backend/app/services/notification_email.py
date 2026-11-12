@@ -47,10 +47,10 @@ def render(settings: Settings, notification: Notification, display_name: str) ->
     lines += [
         "",
         "—",
-        "อีเมลนี้ส่งอัตโนมัติจาก AURA OFFICE AI",
+        "อีเมลนี้ส่งอัตโนมัติจาก ORBIT OFFICE AI",
         f"ตั้งค่าการแจ้งเตือนทางอีเมลได้ที่ {base}/account",
     ]
-    return f"[AURA] {notification.title}", "\n".join(lines)
+    return f"[ORBIT] {notification.title}", "\n".join(lines)
 
 
 def send_notification_emails(

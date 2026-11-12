@@ -113,8 +113,8 @@ def _after_rollback(sync_session: Session) -> None:
     sync_session.info.pop(_PENDING_KEY, None)
 
 
-_PENDING_KEY = "aura_email_notification_ids"
-_HOOKED_KEY = "aura_email_hooked"
+_PENDING_KEY = "orbit_email_notification_ids"
+_HOOKED_KEY = "orbit_email_hooked"
 
 
 def _queue_email(session: AsyncSession | Session, notification_id: uuid.UUID) -> None:
@@ -154,7 +154,7 @@ def welcome(session: AsyncSession | Session, user_id: uuid.UUID) -> Notification
         session,
         user_id=user_id,
         type=NotificationType.ACCOUNT,
-        title="ยินดีต้อนรับสู่ AURA OFFICE AI",
+        title="ยินดีต้อนรับสู่ ORBIT OFFICE AI",
         body="บัญชีของคุณพร้อมใช้งานแล้ว ตรวจสอบข้อมูลบัญชีและเปลี่ยนรหัสผ่านได้ที่หน้าบัญชีของฉัน",
         link_url=ACCOUNT_LINK,
         entity_type="user",

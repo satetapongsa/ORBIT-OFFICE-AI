@@ -80,7 +80,7 @@ DEV_DEPARTMENTS = [
 DEV_USERS = [
     (
         "DEV-0001",
-        "admin@aura.example.com",
+        "admin@orbit.example.com",
         "ผู้ดูแล",
         "ระบบ",
         "ADM",
@@ -89,7 +89,7 @@ DEV_USERS = [
     ),
     (
         "DEV-0002",
-        "manager@aura.example.com",
+        "manager@orbit.example.com",
         "มานพ",
         "ผู้จัดการ",
         "SALES",
@@ -98,7 +98,7 @@ DEV_USERS = [
     ),
     (
         "DEV-0003",
-        "hr@aura.example.com",
+        "hr@orbit.example.com",
         "หทัย",
         "บุคคล",
         "HR",
@@ -107,7 +107,7 @@ DEV_USERS = [
     ),
     (
         "DEV-0004",
-        "it@aura.example.com",
+        "it@orbit.example.com",
         "ไอรดา",
         "เทคโน",
         "IT",
@@ -116,7 +116,7 @@ DEV_USERS = [
     ),
     (
         "DEV-0005",
-        "employee@aura.example.com",
+        "employee@orbit.example.com",
         "เอกชัย",
         "พนักงาน",
         "SALES",
@@ -166,7 +166,7 @@ def seed_dev(session: Session, password: str) -> list[str]:
     for user in new_users:
         notifications.welcome(session, user.id)
     if "SALES" in depts:
-        manager = session.scalar(select(User).where(User.email == "manager@aura.example.com"))
+        manager = session.scalar(select(User).where(User.email == "manager@orbit.example.com"))
         if manager and depts["SALES"].manager_id is None:
             depts["SALES"].manager_id = manager.id
     return created

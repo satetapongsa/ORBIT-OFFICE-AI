@@ -48,7 +48,7 @@ class MailPasswordResetNotifier:
             [
                 f"เรียน คุณ{display_name}",
                 "",
-                "มีคำขอตั้งรหัสผ่านใหม่สำหรับบัญชี AURA OFFICE AI ของคุณ",
+                "มีคำขอตั้งรหัสผ่านใหม่สำหรับบัญชี ORBIT OFFICE AI ของคุณ",
                 f"กดลิงก์นี้ภายใน {minutes} นาทีเพื่อตั้งรหัสผ่านใหม่:",
                 reset_url,
                 "",
@@ -57,7 +57,9 @@ class MailPasswordResetNotifier:
         )
         try:
             await anyio.to_thread.run_sync(
-                lambda: send_mail(self._settings, to=email, subject="[AURA] ตั้งรหัสผ่านใหม่", text=text)
+                lambda: send_mail(
+                    self._settings, to=email, subject="[ORBIT] ตั้งรหัสผ่านใหม่", text=text
+                )
             )
         except MailError:
             logger.warning("password_reset_email_failed")
