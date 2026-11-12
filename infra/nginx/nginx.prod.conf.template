@@ -14,7 +14,14 @@ upstream orbit_frontend {
 }
 
 # Defence in depth for credential endpoints (the API has its own per-account limits).
-limit_req_zone $binary_remote_addr zone=orbit_auth:10m rate=20r/m;
+# Behind Vercel (docs/DEPLOYMENT.md section 10) every visitor arrives from Vercel's addresses,
+# so the key is the visitor IP Vercel reports. A direct caller could forge that header, but the
+# API refuses any request without the proxy secret (ADR-055), so forging gains nothing.
+map $http_x_vercel_forwarded_for $orbit_client_key {
+    ""      $binary_remote_addr;
+    default $http_x_vercel_forwarded_for;
+}
+limit_req_zone $orbit_client_key zone=orbit_auth:10m rate=20r/m;
 limit_req_status 429;
 
 server_tokens off;
