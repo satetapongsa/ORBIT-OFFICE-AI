@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Architecture Decision Records
+# ORBIT OFFICE AI — Architecture Decision Records
 
 Format: context → decision → consequences. Newest at the bottom. Superseded
 decisions are kept and marked.
@@ -143,7 +143,7 @@ except within a 10-second grace window (parallel tabs) where it is only rejected
 instant; two tabs refreshing together do not log the user out.
 
 ## ADR-017 — CSRF: double-submit cookie, Bearer exempt (2026-11-11)
-**Decision.** `aura_csrf` (readable, `SameSite=Lax`) must equal `X-CSRF-Token` on
+**Decision.** `orbit_csrf` (readable, `SameSite=Lax`) must equal `X-CSRF-Token` on
 cookie-authenticated unsafe requests, including refresh/logout. Requests authenticated
 with `Authorization: Bearer` carry no ambient credentials and are exempt. Login and
 password-reset endpoints are unauthenticated and exempt.
@@ -165,7 +165,7 @@ predicate, tested against PostgreSQL. Phase 4 adds versions, storage and categor
 **Consequences.** Phase 4/7 code must import this predicate instead of re-implementing rules.
 
 ## ADR-020 — Test database and test isolation (2026-11-11)
-**Decision.** Tests use a separate database (`aura_office_test`, or `AURA_TEST_DATABASE_URL`)
+**Decision.** Tests use a separate database (`orbit_office_test`, or `ORBIT_TEST_DATABASE_URL`)
 created and migrated automatically by `tests/conftest.py`; tables are truncated and RBAC
 re-synced before every DB test. The fixture refuses database names without `test`.
 `DATABASE_USE_NULL_POOL=true` avoids sharing pooled connections between the event loops of
@@ -185,7 +185,7 @@ added later (Next.js `proxy.ts`) if needed.
 
 ## ADR-022 — Test/dev e-mail domains (2026-11-11)
 **Context.** `email-validator` rejects special-use domains such as `.local` and `.test`.
-**Decision.** Development seed accounts use `@aura.example.com`, tests use `@example.com`
+**Decision.** Development seed accounts use `@orbit.example.com`, tests use `@example.com`
 (RFC 2606 documentation domains, accepted by the validator, never deliverable).
 
 ## ADR-023 — Notification inbox ships in Phase 3 (2026-11-11)

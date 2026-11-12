@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Database Design
+# ORBIT OFFICE AI — Database Design
 
 PostgreSQL 17 with the `vector` (pgvector) extension. This document is the
 target schema. Tables are created incrementally by Alembic migrations in the

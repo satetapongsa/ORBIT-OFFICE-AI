@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Development Phases
+# ORBIT OFFICE AI — Development Phases
 
 Phases are executed **in order**. A phase starts only when the previous phase's
 acceptance criteria are met, or the unmet criteria are explicitly recorded in

@@ -1,4 +1,4 @@
-# AURA OFFICE AI — PROJECT STATUS
+# ORBIT OFFICE AI — PROJECT STATUS
 
 **Current Phase:** Phase 7 — RAG Knowledge Base — ✅ **COMPLETE** (verified 2026-11-12). Next: Phase 8.
 **Last Updated:** 2026-11-12
@@ -63,7 +63,7 @@
 - **Audit log**: 20 action types (auth, users, roles, departments), written in the same
   transaction; passwords/tokens never stored; `GET /audit-logs` with filters.
 - **Dev seed**: `python -m app.cli seed-dev` (development only, idempotent): 5 departments and
-  one account per role (`*@aura.example.com`, password `SEED_DEV_PASSWORD`).
+  one account per role (`*@orbit.example.com`, password `SEED_DEV_PASSWORD`).
 - **Frontend**: login, forgot-password, reset-password pages; account page with change-password;
   `AuthGate` redirecting to `/login?next=…` (open-redirect safe); API client with CSRF header and
   single-flight refresh-and-retry; user menu with logout; sidebar filtered by permissions;
@@ -280,7 +280,7 @@ preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF ex
 ### Phase 8 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (125 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **288 passed**, 1 skipped (Windows-only) |
 | — `tests/api/test_tickets.py` | ✅ 14: numbering, dispatcher notifications, audit, requester-only visibility (404), IT scopes/filters/search, assignment rules, status transitions by role, internal notes hidden + not notified, requester reply resumes waiting ticket, IT-only category/priority, validation |
@@ -304,7 +304,7 @@ preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF ex
 ### Phase 7 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (113 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **252 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/unit/test_rag_units.py` | ✅ 16: chunk sizes/overlap/paragraph cuts/no text lost, text without breaks, PDF page numbers, invalid settings, vector literal, embedding batching + request shape, async embedding, failures (status, bad body, wrong dimension, wrong count, connection), provider settings + 1024-dimension rule |
@@ -326,7 +326,7 @@ preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF ex
 ### Phase 6 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (107 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **224 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/unit/test_ai_providers.py` | ✅ 16: OpenAI-compatible request shape (system first, tool calls, tool results, system notes), streamed text + tool-call fragments + usage, invalid tool JSON, truncation, error mapping 401/404/429/400/503 without leaking bodies, connection failure; Anthropic (SDK over a mock transport): headers, beta fallback + `fallbacks`, no temperature/thinking, prompt caching, eager tool streaming, raw content replayed unchanged, parallel tool results in one message, streamed text + tool use + usage, refusal flag, plain endpoint for models without fallbacks, error mapping; provider factory |
@@ -348,7 +348,7 @@ preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF ex
 ### Phase 5 verification — 2026-11-11
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (97 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **191 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/api/test_tasks.py` | ✅ 22: 401/403 guards, personal task (self-assigned, own department, events, audit, no self-notification), employees cannot assign others or create in another department, managers assign within their department only (422 cross-department/unknown/inactive), replace assignees (notifications, access removed), visibility matrix for 6 users, 404 on every sub-resource for invisible tasks, department scope needs permission, assignee capabilities (status yes; edit/cancel/delete no), manager edit + `manage_all` department move + delete, clearing fields and no-op updates, time zone required, scopes/filters/search (`%` literal)/sorting/pagination/overdue, assignable-people scoping, comments (notifications, authorship, moderation, length), attachments (store, download headers + audit, spoofed file rejected, outsider 404, delete removes object), storage failure leaves no row, 413 before reading, dashboard task summary |
@@ -377,7 +377,7 @@ Phase 0–4 data were unaffected; the attachment object remains orphaned in MinI
 ### Phase 4 verification — 2026-11-11
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (84 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **163 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/api/test_documents.py` | ✅ 26: 401/403, upload of all four types + extraction, spoofed/unsupported/empty/oversized/zip-bomb files, storage cleanup on DB failure, list visibility per role and ACL, search/filter/sort, 404 for inaccessible documents, capabilities, edit/visibility rules, new version, re-process rules, download + audit, text preview, ACL replace validation + notifications + escalation, history permissions, soft delete, directory lookup |
@@ -403,7 +403,7 @@ Backend checks ran inside the backend container (Python 3.13), as in Phase 2.
 
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (75 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **113 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/api/test_dashboard.py` | ✅ 15: 401 unauthenticated, section matrix for all 5 roles + a user with no roles, active sessions + previous sign-in + logout, own-activity isolation, changes by others on my account, ACL-scoped document count (department/private/admin override), organisation counts (inactive users, soft-deleted department), security counts (failed sign-ins), Bangkok-day grouping, period boundaries |
@@ -428,7 +428,7 @@ Control now blocks the host venv's compiled wheels (see Known Issues).
 
 | Check (command) | Result |
 | --- | --- |
-| `CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
 | ruff check + format, mypy strict (66 files) | ✅ clean |
 | `pytest` (container, incl. integration + DB tests) | ✅ **82 passed**, 1 skipped (Windows-only event-loop test) |
 | — `tests/api/test_auth.py` | ✅ 16: cookies/flags, generic errors, inactive users, 401 on all protected endpoints, Bearer, tampered JWT, CSRF, refresh rotation, reuse detection, parallel-tab grace, logout revocation, rate limit 429, change password, reset flow |
@@ -462,14 +462,14 @@ host Python 3.15.2 / Node 26.13; containers Python 3.13.18 / Node 22.
 | 3 | `docker compose down` → `docker compose up -d` (clean start) | ✅ all services up in 17 s in dependency order; `migrate` exits 0; postgres/redis/minio/backend healthy |
 | 4 | PostgreSQL + pgvector (`psql`) | ✅ PostgreSQL 17.11; extensions `vector 0.8.7`, `pg_trgm 1.6` installed by migration |
 | 5 | Redis (`redis-cli ping`, integration test) | ✅ Redis 7.4.12 `PONG`; set/get/delete round trip |
-| 6 | MinIO / S3 (`mc ls`, integration test) | ✅ `pgsty/minio` RELEASE.2026-08-04 healthy; bucket `aura-documents` auto-created; S3 put/get/delete round trip via boto3 |
+| 6 | MinIO / S3 (`mc ls`, integration test) | ✅ `pgsty/minio` RELEASE.2026-08-04 healthy; bucket `orbit-documents` auto-created; S3 put/get/delete round trip via boto3 |
 | 7 | Celery worker | ✅ ready on `default` + `documents`; `system.ping` round trip API→Redis→worker→result |
 | 8 | Alembic | ✅ `upgrade head` → `0001 (head)`; `downgrade base` + `upgrade head` round trip |
-| 9 | Integration tests | ✅ container `pytest`: 31 passed, 1 skipped (Windows-only test); host `AURA_RUN_INTEGRATION=1 pytest`: 32 passed |
+| 9 | Integration tests | ✅ container `pytest`: 31 passed, 1 skipped (Windows-only test); host `ORBIT_RUN_INTEGRATION=1 pytest`: 32 passed |
 | 10 | `bash scripts/smoke-test.sh` | ✅ liveness, readiness **200**, frontend page, frontend→backend proxy |
 | 11 | Frontend + backend via Docker | ✅ backend container healthy; frontend container serves Thai UI with real readiness data; `/api` proxied to the `backend` service |
 | — | Nginx (`--profile proxy`) on :8080 | ✅ page 200, `/api/v1/health` 200, `nginx -t` ok, one copy of each security header |
-| — | Prod images run | ✅ non-root `aura`, healthcheck healthy, 4 uvicorn workers, standalone frontend proxy 200 |
+| — | Prod images run | ✅ non-root `orbit`, healthcheck healthy, 4 uvicorn workers, standalone frontend proxy 200 |
 | — | Native Windows backend (RUNBOOK option B) | ✅ with `--loop app.core.event_loop:selector_event_loop` readiness 200; without it the `windows_proactor_event_loop` warning is logged |
 | — | `scripts/check.sh` | ✅ ruff, mypy (36 files), pytest 27 passed / 5 skipped (integration), alembic SQL, ESLint, tsc, Vitest 12 passed, Prettier |
 | — | `npm run build` | ✅ compiled |
@@ -516,7 +516,7 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 | Manual: backend `uvicorn` + frontend `next dev` locally | ✅ `/health/live` 200 with security headers; `/api/v1/health` via Next proxy → 503 report (no infra running, as expected); UI renders status in Thai on desktop and mobile; mobile drawer works |
 | Compose YAML parse (PyYAML) | ✅ 8 services, container hostnames resolved |
 | `docker compose up` | ⚠️ **not executed** — Docker not installed on this machine |
-| `pytest -m integration` with `AURA_RUN_INTEGRATION=1` | ⚠️ **not executed** — needs PostgreSQL/Redis/MinIO |
+| `pytest -m integration` with `ORBIT_RUN_INTEGRATION=1` | ⚠️ **not executed** — needs PostgreSQL/Redis/MinIO |
 
 ## Known Issues
 1. **Host Python venv blocked by Windows Application Control** (since the 2026-11-11 restart):
@@ -589,7 +589,7 @@ bash scripts/smoke-test.sh
 Then start the next session with:
 
 ```
-Continue AURA OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 9 — SECURITY, TESTING & DEPLOYMENT as defined in docs/DEVELOPMENT_PHASES.md.
+Continue ORBIT OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 9 — SECURITY, TESTING & DEPLOYMENT as defined in docs/DEVELOPMENT_PHASES.md.
 ```
 
 ## Report format (end of every phase, in Thai)

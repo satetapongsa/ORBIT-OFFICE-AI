@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Architecture
+# ORBIT OFFICE AI — Architecture
 
 ## 1. System overview
 
@@ -41,7 +41,7 @@
 ## 2. Repository layout
 
 ```
-aura-office-ai/
+orbit-office-ai/
 ├── frontend/                 Next.js App Router + TypeScript + Tailwind + shadcn/ui
 │   ├── app/                  routes and layouts only (thin)
 │   ├── components/           shared UI: ui/ (shadcn primitives), layout/ (shell)

@@ -1,6 +1,6 @@
-# AURA OFFICE AI — Project Overview
+# ORBIT OFFICE AI — Project Overview
 
-**AURA OFFICE AI** is an AI-powered internal office management platform for a
+**ORBIT OFFICE AI** is an AI-powered internal office management platform for a
 medium-sized private company. It centralises office information, tasks,
 documents, IT support, HR information and analytics in one web application, and
 adds an AI assistant that answers questions **only from company data the

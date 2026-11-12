@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Runbook
+# ORBIT OFFICE AI — Runbook
 
 Commands assume the repository root unless stated otherwise. On Windows use Git
 Bash (paths with `/`) or adapt to PowerShell.
@@ -46,7 +46,7 @@ docker compose exec backend python -m app.cli seed-dev
 ```
 
 This creates five departments and one account per system role:
-`admin@`, `manager@`, `hr@`, `it@` and `employee@aura.example.com`, all with the password
+`admin@`, `manager@`, `hr@`, `it@` and `employee@orbit.example.com`, all with the password
 `SEED_DEV_PASSWORD` from your `.env`. Sign in at http://127.0.0.1:3000/login.
 
 With the reverse proxy:
@@ -99,18 +99,18 @@ python -c "from app.workers.tasks import ping; print(ping.delay().get(timeout=10
 
 ```bash
 scripts/check.sh                                       # everything below, backend via local venv
-CHECK_BACKEND_IN_DOCKER=1 AURA_RUN_INTEGRATION=1 scripts/check.sh   # backend inside the container
+CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 scripts/check.sh   # backend inside the container
 ```
 
 Database-backed tests (auth, RBAC, document ACL) use a separate database,
-`aura_office_test`, created and migrated automatically; they never touch development
+`orbit_office_test`, created and migrated automatically; they never touch development
 data and are skipped (with a reason) only if PostgreSQL is unreachable.
 
 Backend (in `backend/`, venv active):
 
 ```bash
 pytest                               # unit tests; integration tests are skipped
-AURA_RUN_INTEGRATION=1 pytest -m integration   # needs postgres/redis/minio + migrations
+ORBIT_RUN_INTEGRATION=1 pytest -m integration   # needs postgres/redis/minio + migrations
 ruff check . && ruff format --check .
 mypy app
 alembic upgrade head --sql > /dev/null         # offline migration render check
@@ -140,8 +140,8 @@ Downgrades drop tables and their data. To test a migration round trip, point Ale
 **test** database, not the dev database the containers use:
 
 ```bash
-docker compose exec backend sh -c 'DATABASE_URL="${DATABASE_URL%/*}/aura_office_test" alembic downgrade -1'
-docker compose exec backend sh -c 'DATABASE_URL="${DATABASE_URL%/*}/aura_office_test" alembic upgrade head'
+docker compose exec backend sh -c 'DATABASE_URL="${DATABASE_URL%/*}/orbit_office_test" alembic downgrade -1'
+docker compose exec backend sh -c 'DATABASE_URL="${DATABASE_URL%/*}/orbit_office_test" alembic upgrade head'
 ```
 
 Rules: never edit an applied migration; never use `create_all()`; review every
@@ -204,7 +204,7 @@ pulling Phase 8 rebuild it: `docker compose up -d --build backend worker`.
 | Login/app page stays on a grey skeleton; console shows `/_next/hmr` blocked | The dev server only trusts `localhost`; `allowedDevOrigins: ["127.0.0.1"]` is set in `next.config.ts` — restart the frontend after changing it. |
 | Host venv: `DLL load failed ... An Application Control policy has blocked this file` | Windows Smart App Control / WDAC blocks unsigned compiled wheels. Do not disable it for this project; run backend commands in the container (`docker compose exec backend …`, `CHECK_BACKEND_IN_DOCKER=1 scripts/check.sh`). |
 | `seed-dev refused: ENVIRONMENT must be 'development'` | Intended: development accounts are never created in other environments. |
-| Login returns 429 | Login rate limit (10 attempts / 15 min per e-mail). Wait for `Retry-After`, or in development `docker compose exec redis redis-cli --scan --pattern 'aura:ratelimit:*'` to inspect. |
+| Login returns 429 | Login rate limit (10 attempts / 15 min per e-mail). Wait for `Retry-After`, or in development `docker compose exec redis redis-cli --scan --pattern 'orbit:ratelimit:*'` to inspect. |
 | Next.js dev server does not pick up edits inside Docker on Windows | `WATCHPACK_POLLING=true` is set in Compose, but Turbopack in the container still missed host edits during Phase 3 — run `docker compose restart frontend`, or run `npm run dev` on the host for UI work. |
 | Dev overlay: `Could not validate that a segment in your UI has instant navigation` | Pages under `app/(app)` must export `instant = false` (they render after the client-side session check, ADR-027). |
 | `/` returns 307 | Intended: the home page redirects to `/dashboard`; system status is at `/system-status`. |

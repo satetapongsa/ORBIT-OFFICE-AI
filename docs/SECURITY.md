@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Security Principles
+# ORBIT OFFICE AI — Security Principles
 
 Security is enforced in the **backend**. The frontend may hide actions the user
 cannot perform, but every API independently authenticates and authorises.
@@ -13,9 +13,9 @@ cannot perform, but every API independently authenticates and authorises.
 | Per-request checks | token valid → user exists, active, not deleted → token issued after the last password change → session family not revoked/expired → permissions loaded fresh |
 | Refresh token      | 256-bit opaque value, stored only as SHA-256 in `user_sessions`; idle lifetime 7 days, absolute cap 30 days per login |
 | Rotation           | every refresh issues a new token and marks the old row rotated. A rotated token re-presented within `REFRESH_REUSE_GRACE_SECONDS` (10 s, parallel tabs) is rejected without revoking; later re-use revokes the whole family and is audit-logged (`auth.refresh_reuse_detected`) |
-| Cookies            | `aura_access` (path `/api`) and `aura_refresh` (path `/api/v1/auth`) are `HttpOnly`; `aura_csrf` (path `/`) is readable; all `SameSite=Lax`, `Secure` except in development/test (`COOKIE_SECURE` overrides). Nothing is stored in `localStorage` |
+| Cookies            | `orbit_access` (path `/api`) and `orbit_refresh` (path `/api/v1/auth`) are `HttpOnly`; `orbit_csrf` (path `/`) is readable; all `SameSite=Lax`, `Secure` except in development/test (`COOKIE_SECURE` overrides). Nothing is stored in `localStorage` |
 | Bearer tokens      | `Authorization: Bearer <access token>` is accepted for API clients; such requests are not subject to CSRF (no ambient credentials) |
-| CSRF               | double-submit: `X-CSRF-Token` must equal the `aura_csrf` cookie on every cookie-authenticated `POST/PUT/PATCH/DELETE`, including refresh and logout. Login and password-reset endpoints carry no session and are exempt |
+| CSRF               | double-submit: `X-CSRF-Token` must equal the `orbit_csrf` cookie on every cookie-authenticated `POST/PUT/PATCH/DELETE`, including refresh and logout. Login and password-reset endpoints carry no session and are exempt |
 | Logout             | revokes the session family (all rotations), clears cookies, audit-logged; the still-unexpired access token stops working immediately |
 | Password change    | requires the current password; revokes every other session and issues fresh tokens for the current one |
 | Password reset     | single-use token (SHA-256 in DB, 30 min), older tokens invalidated, all sessions revoked on success; the request endpoint always answers 202 with the same message (no enumeration). Delivery: no mail adapter yet — in `development` the link is logged, elsewhere it is **not** logged and a warning says delivery is not configured |

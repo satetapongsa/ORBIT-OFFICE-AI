@@ -1,4 +1,4 @@
-# AURA OFFICE AI — API Conventions
+# ORBIT OFFICE AI — API Conventions
 
 ## Base
 
@@ -85,7 +85,7 @@ Standard codes: `bad_request`, `unauthenticated`, `permission_denied`,
 ## Authentication (implemented in Phase 2)
 
 Browser clients authenticate with HttpOnly cookies set by `POST /api/v1/auth/login`
-(`aura_access`, `aura_refresh`) plus a readable `aura_csrf` cookie whose value must be
+(`orbit_access`, `orbit_refresh`) plus a readable `orbit_csrf` cookie whose value must be
 echoed in `X-CSRF-Token` on every cookie-authenticated `POST/PUT/PATCH/DELETE`
 (including refresh and logout). API clients may send `Authorization: Bearer <access token>`
 instead (no CSRF needed). Details in `SECURITY.md`.
