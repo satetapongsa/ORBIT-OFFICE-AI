@@ -3,11 +3,11 @@ import type { ReactNode } from "react";
 
 // Only standalone in-app paths with a UUID become links (not parts of other URLs).
 const IN_APP_LINK =
-  /(?<![\w.:/-])(\/(?:tasks|documents|employees)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+  /(?<![\w.:/-])(\/(?:tasks|documents|employees|helpdesk)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
 
 /**
  * Model output is untrusted: it is rendered as plain text (never HTML or Markdown), with
- * in-app links to tasks, documents and people made clickable.
+ * in-app links to tasks, documents, people and IT tickets made clickable.
  */
 export function MessageText({ text }: { text: string }) {
   const parts: ReactNode[] = [];
