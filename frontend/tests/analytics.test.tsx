@@ -68,7 +68,7 @@ function overview(overrides: Partial<AnalyticsOverview> = {}): AnalyticsOverview
 
 beforeEach(() => {
   permissions = new Set(MANAGER);
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("bangkokDay", () => {
@@ -186,7 +186,7 @@ describe("AnalyticsView", () => {
         json({ enabled: false, provider: null, model: null, tools: [], max_message_chars: 4000 }),
       "GET /api/v1/reports/overview.xlsx": () =>
         new Response(new Blob(["x"]), {
-          headers: { "Content-Disposition": 'attachment; filename="aura-report.xlsx"' },
+          headers: { "Content-Disposition": 'attachment; filename="orbit-report.xlsx"' },
         }),
     });
     URL.createObjectURL = vi.fn(() => "blob:report");

@@ -109,6 +109,6 @@ export function summarizeAnalytics(params: AnalyticsParams) {
 export function downloadReport(params: AnalyticsParams, format: "xlsx" | "pdf") {
   return apiDownload(`/reports/overview.${format}`, {
     query: query(params),
-    fallbackName: `aura-report.${format}`,
+    fallbackName: `orbit-report.${format}`,
   });
 }

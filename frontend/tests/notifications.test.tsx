@@ -20,7 +20,7 @@ const page = (items = [notification()], unread = 1) => ({
 
 describe("NotificationsView", () => {
   it("lists notifications, filters unread and marks all as read with CSRF", async () => {
-    document.cookie = "aura_csrf=csrf-token; path=/";
+    document.cookie = "orbit_csrf=csrf-token; path=/";
     let unread = 1;
     const fetchMock = mockApi({
       "GET /api/v1/notifications": (url) =>

@@ -12,7 +12,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 const readiness = {
   status: "error",
-  service: "AURA OFFICE AI",
+  service: "ORBIT OFFICE AI",
   version: "0.1.0",
   environment: "development",
   checked_at: "2026-11-10T08:00:00Z",

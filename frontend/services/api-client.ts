@@ -70,7 +70,7 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-export const CSRF_COOKIE = "aura_csrf";
+export const CSRF_COOKIE = "orbit_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 const SAFE_METHODS = new Set<HttpMethod>(["GET"]);
 /** Auth endpoints never trigger the automatic refresh-and-retry. */
@@ -267,7 +267,7 @@ export async function apiDownload(
 }
 
 /**
- * Typed fetch wrapper for the AURA backend.
+ * Typed fetch wrapper for the ORBIT backend.
  * - Sends cookies (same-origin) and the CSRF header on state-changing requests.
  * - On 401, refreshes the session once and retries; notifies listeners if that fails.
  * - Parses the standard error envelope into `ApiError`.

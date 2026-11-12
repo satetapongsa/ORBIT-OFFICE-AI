@@ -49,7 +49,7 @@ const ROLES = [
 
 beforeEach(() => {
   permissions = new Set(["roles:read", "roles:manage", "documents:read", "tasks:read_own"]);
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("groupPermissions", () => {

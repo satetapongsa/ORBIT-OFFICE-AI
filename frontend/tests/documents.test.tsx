@@ -94,7 +94,7 @@ beforeEach(() => {
     "departments:read",
   ]);
   push.mockReset();
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("helpers", () => {

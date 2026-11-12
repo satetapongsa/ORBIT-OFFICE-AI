@@ -91,7 +91,7 @@ function sse(events: [string, unknown][]): Response {
 }
 
 beforeEach(() => {
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
   searchParams = new URLSearchParams();
 });
 

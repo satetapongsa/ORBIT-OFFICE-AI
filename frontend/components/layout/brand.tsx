@@ -11,7 +11,7 @@ export function Brand() {
         <Sparkles className="size-4" aria-hidden />
       </span>
       <span className="flex flex-col leading-tight">
-        <span className="text-sm font-semibold tracking-wide">AURA OFFICE AI</span>
+        <span className="text-sm font-semibold tracking-wide">ORBIT OFFICE AI</span>
         <span className="text-muted-foreground text-[11px]">ระบบบริหารงานสำนักงาน</span>
       </span>
     </Link>

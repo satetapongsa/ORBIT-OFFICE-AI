@@ -18,10 +18,10 @@ const schema = z.object({ ok: z.boolean() });
 
 describe("CSRF header", () => {
   beforeEach(() => {
-    document.cookie = "aura_csrf=csrf-123; path=/";
+    document.cookie = "orbit_csrf=csrf-123; path=/";
   });
   afterEach(() => {
-    document.cookie = "aura_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    document.cookie = "orbit_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
   });
 
   it("is sent on state-changing requests only", async () => {
@@ -38,7 +38,7 @@ describe("CSRF header", () => {
 
 describe("automatic session refresh", () => {
   it("refreshes once on 401 and retries the original request", async () => {
-    document.cookie = "aura_csrf=csrf-123; path=/"; // a session exists in this browser
+    document.cookie = "orbit_csrf=csrf-123; path=/"; // a session exists in this browser
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(json(401, unauthenticated)) // original
@@ -54,7 +54,7 @@ describe("automatic session refresh", () => {
   });
 
   it("skips the refresh call when there was never a session", async () => {
-    document.cookie = "aura_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+    document.cookie = "orbit_csrf=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     const fetchMock = vi.fn().mockResolvedValue(json(401, unauthenticated));
     vi.stubGlobal("fetch", fetchMock);
     await expect(apiRequest("/users", { schema })).rejects.toMatchObject({ status: 401 });

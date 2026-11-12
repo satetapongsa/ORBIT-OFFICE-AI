@@ -1,4 +1,4 @@
-# AURA OFFICE AI — Frontend
+# ORBIT OFFICE AI — Frontend
 
 Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui (Radix).
 See the repository `README.md` and `docs/RUNBOOK.md` for setup and commands.

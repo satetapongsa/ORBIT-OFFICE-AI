@@ -97,7 +97,7 @@ function taskApi(
 beforeEach(() => {
   permissions = new Set(["tasks:read_own", "tasks:create"]);
   push.mockReset();
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("due dates", () => {

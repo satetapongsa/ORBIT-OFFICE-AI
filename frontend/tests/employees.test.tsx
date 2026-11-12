@@ -32,7 +32,7 @@ const employee = (overrides: Partial<Employee> = {}): Employee => ({
   last_name: "ใจดี",
   job_title: "เจ้าหน้าที่ขาย",
   department: { id: "d-1", code: "SALES", name: "ฝ่ายขาย" },
-  email: "somchai@aura.example.com",
+  email: "somchai@orbit.example.com",
   phone_work: "02-000-0001",
   is_active: true,
   ...overrides,
@@ -86,7 +86,7 @@ const departments = [
 beforeEach(() => {
   permissions = new Set(["employees:read_directory", "departments:read"]);
   selfId = "u-viewer";
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("initials", () => {
@@ -111,9 +111,9 @@ describe("EmployeesView", () => {
       "href",
       "/employees/u-somchai",
     );
-    expect(within(card).getByRole("link", { name: "somchai@aura.example.com" })).toHaveAttribute(
+    expect(within(card).getByRole("link", { name: "somchai@orbit.example.com" })).toHaveAttribute(
       "href",
-      "mailto:somchai@aura.example.com",
+      "mailto:somchai@orbit.example.com",
     );
     // Employees cannot add people or see suspended accounts.
     expect(screen.queryByRole("button", { name: "เพิ่มพนักงาน" })).not.toBeInTheDocument();

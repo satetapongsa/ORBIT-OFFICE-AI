@@ -95,7 +95,7 @@ function ticketApi(ticket: TicketDetail, extra: Parameters<typeof mockApi>[0] = 
 beforeEach(() => {
   permissions = new Set(EMPLOYEE);
   push.mockReset();
-  document.cookie = "aura_csrf=csrf-token; path=/";
+  document.cookie = "orbit_csrf=csrf-token; path=/";
 });
 
 describe("HelpdeskView", () => {

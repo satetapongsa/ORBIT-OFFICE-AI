@@ -13,7 +13,7 @@ export default function SystemStatusPage() {
     <>
       <PageHeader
         title="สถานะระบบ"
-        description="ผลการตรวจสอบบริการที่ AURA OFFICE AI ต้องใช้ ดึงข้อมูลจริงจาก API ของระบบ และรีเฟรชอัตโนมัติทุก 30 วินาที"
+        description="ผลการตรวจสอบบริการที่ ORBIT OFFICE AI ต้องใช้ ดึงข้อมูลจริงจาก API ของระบบ และรีเฟรชอัตโนมัติทุก 30 วินาที"
       />
       <SystemStatusPanel />
     </>

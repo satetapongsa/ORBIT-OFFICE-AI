@@ -20,8 +20,8 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AURA OFFICE AI",
-    template: "%s · AURA OFFICE AI",
+    default: "ORBIT OFFICE AI",
+    template: "%s · ORBIT OFFICE AI",
   },
   description: "แพลตฟอร์มบริหารจัดการงานสำนักงานด้วย AI สำหรับองค์กร",
   robots: { index: false, follow: false },
