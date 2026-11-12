@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmailPreferencesCard } from "@/features/account/components/email-preferences-card";
 import { ChangePasswordForm } from "@/features/auth/components/change-password-form";
 import { useSession } from "@/features/auth/hooks/use-session";
 import { roleLabel } from "@/features/auth/labels";
@@ -61,6 +62,7 @@ export function AccountOverview() {
           <ChangePasswordForm />
         </CardContent>
       </Card>
+      <EmailPreferencesCard />
     </div>
   );
 }

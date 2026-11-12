@@ -3,7 +3,14 @@ import { z } from "zod";
 import { apiRequest } from "@/services/api-client";
 
 /** Mirrors backend `app/schemas/notifications.py`. */
-export const notificationTypeSchema = z.enum(["SECURITY", "ACCOUNT", "SYSTEM", "DOCUMENT", "TASK"]);
+export const notificationTypeSchema = z.enum([
+  "SECURITY",
+  "ACCOUNT",
+  "SYSTEM",
+  "DOCUMENT",
+  "TASK",
+  "TICKET",
+]);
 
 export const notificationSchema = z.object({
   id: z.string(),
@@ -45,7 +52,31 @@ export const notificationQueryKeys = {
   all: ["notifications"] as const,
   unreadCount: ["notifications", "unread-count"] as const,
   list: (params: NotificationListParams) => ["notifications", "list", params] as const,
+  preferences: ["notifications", "preferences"] as const,
 };
+
+export const emailPreferencesSchema = z.object({
+  /** False while the server has no mail server configured. */
+  email_available: z.boolean(),
+  items: z.array(
+    z.object({ type: notificationTypeSchema, email_enabled: z.boolean(), default: z.boolean() }),
+  ),
+});
+export type EmailPreferences = z.infer<typeof emailPreferencesSchema>;
+
+export function getEmailPreferences(signal?: AbortSignal): Promise<EmailPreferences> {
+  return apiRequest("/notifications/preferences", { schema: emailPreferencesSchema, signal });
+}
+
+export function setEmailPreferences(
+  items: { type: NotificationType; email_enabled: boolean }[],
+): Promise<EmailPreferences> {
+  return apiRequest("/notifications/preferences", {
+    method: "PUT",
+    schema: emailPreferencesSchema,
+    body: { items },
+  });
+}
 
 export function listNotifications(
   { page = 1, pageSize = 20, unreadOnly = false }: NotificationListParams,

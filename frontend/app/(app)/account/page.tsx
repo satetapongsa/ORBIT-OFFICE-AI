@@ -11,7 +11,10 @@ export const metadata: Metadata = { title: "บัญชีของฉัน" }
 export default function AccountPage() {
   return (
     <>
-      <PageHeader title="บัญชีของฉัน" description="ข้อมูลบัญชี บทบาท และการตั้งรหัสผ่าน" />
+      <PageHeader
+        title="บัญชีของฉัน"
+        description="ข้อมูลบัญชี บทบาท รหัสผ่าน และการแจ้งเตือนทางอีเมล"
+      />
       <AccountOverview />
     </>
   );

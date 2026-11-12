@@ -1,4 +1,12 @@
-import { Bell, FileText, ListChecks, ShieldAlert, UserCog, type LucideIcon } from "lucide-react";
+import {
+  Bell,
+  FileText,
+  Headset,
+  ListChecks,
+  ShieldAlert,
+  UserCog,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { NotificationType } from "@/services/notifications";
 
@@ -8,4 +16,5 @@ export const NOTIFICATION_TYPES: Record<NotificationType, { label: string; icon:
   SYSTEM: { label: "ระบบ", icon: Bell },
   DOCUMENT: { label: "เอกสาร", icon: FileText },
   TASK: { label: "งาน", icon: ListChecks },
+  TICKET: { label: "แจ้งปัญหาไอที", icon: Headset },
 };
