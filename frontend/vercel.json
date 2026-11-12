@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "transforms": [
+        {
+          "type": "request.headers",
+          "op": "set",
+          "target": { "key": "x-orbit-proxy-secret" },
+          "args": "$PROXY_SHARED_SECRET",
+          "env": ["PROXY_SHARED_SECRET"]
+        }
+      ],
+      "continue": true
+    }
+  ]
+}
