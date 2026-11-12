@@ -269,14 +269,26 @@
   `test_config.py`, end-to-end workflows over real HTTP (`scripts/e2e-test.sh`), frontend CSP
   and status-page tests.
 
+### After Phase 9 — Ticket attachments (2026-11-12)
+- Migration `0009` `ticket_attachments`; `GET/POST /tickets/{id}/attachments`,
+  `DELETE …/{attachment_id}`, `GET …/{attachment_id}/download` (ADR-054).
+- Screenshots (PNG/JPEG by signature) plus PDF/DOCX/XLSX/TXT; internal files for IT; uploader or
+  IT removes; closed/cancelled tickets accept files only from IT; notifications, audit, history.
+- UI: "ไฟล์แนบ" card on the ticket page (image preview, download, delete, internal toggle for IT)
+  and optional files in the "แจ้งปัญหาใหม่" dialog (uploaded right after the ticket is created).
+- Verified: backend **328 passed**, frontend **97 passed**, e2e 6 passed; migration round trip
+  on the test DB; browser: employee reported a ticket with a PNG screenshot from the dialog, IT
+  previewed it and added an internal file, the employee saw only the screenshot and got 404 for
+  the internal file.
+
 ## In Progress
 - Nothing. All phases (0–9) are complete.
 
 ## Remaining
 - Go-live on a real server (`docs/DEPLOYMENT.md`): DNS, certificate, `.env.production`, SMTP
   provider, off-site backup schedule. Nothing has been deployed yet.
-- Not built (possible next work): ticket attachments, due-date reminders, settings UI for AI /
-  SMTP, OCR for scanned PDFs, antivirus scanning, browser-driven UI tests (Playwright).
+- Not built (possible next work): due-date reminders, settings UI for AI / SMTP, OCR for
+  scanned PDFs, antivirus scanning, browser-driven UI tests (Playwright).
 
 ## Technical Decisions
 See `docs/DECISIONS.md`. Key ones: same-origin API via proxy (ADR-002); psycopg 3 for async and
@@ -301,7 +313,7 @@ fixed 1024-dimension embeddings and re-indexing (ADR-042); RAG through tools wit
 preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF exports
 (ADR-047); role editor on `/settings` (ADR-048); fail-closed rate limiting (ADR-049); CSP
 without nonces (ADR-050); retention clean-up (ADR-051); backups with verified restore
-(ADR-052); single-host production stack (ADR-053).
+(ADR-052); single-host production stack (ADR-053); ticket attachments (ADR-054).
 
 ## Tests
 ### Phase 9 verification — 2026-11-12
@@ -604,7 +616,7 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 19. Files left behind by failed uploads or storage errors are removed by the daily orphan
     sweep after 24 hours.
 20. There are no due-date reminders for tasks yet.
-21. Tickets have no attachments yet (the DB design lists `ticket_attachments`).
+21. Ticket image attachments are previewed but not resized or stripped of metadata (EXIF).
 22. The assistant has not been run against a live model here (no Ollama or API key on this
     machine); adapters are tested against their wire formats and the full stack against a
     scripted stub. The Anthropic refusal-fallback beta is untested against the live API.

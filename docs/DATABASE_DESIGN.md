@@ -221,7 +221,10 @@ Retention: `AI_CHAT_RETENTION_DAYS` is configured but the purge job is Phase 9.
 | `ticket_events` | status/assignment/priority/category/comment history, is_internal |
 
 Implemented in migration `0008`: sequence `ticket_number_seq`; trigram index on ticket
-titles; priority reuses the task priority values. `ticket_attachments` is not built yet.
+titles; priority reuses the task priority values. Migration `0009` adds `ticket_attachments`
+(ticket_id CASCADE, storage_key unique, original_filename, file_type `PDF|DOCX|XLSX|TXT|PNG|JPEG`,
+mime_type, size_bytes, sha256, is_internal, uploaded_by SET NULL, created_at) and the event types
+`ATTACHMENT_ADDED` / `ATTACHMENT_REMOVED`.
 Notifications gained type `TICKET`, `email_status` (`PENDING`,`SENT`,`SKIPPED`,`FAILED`) and
 `emailed_at`; `notification_preferences` (user_id + type primary key, `email_enabled`) stores
 per-type e-mail choices (missing row = default).

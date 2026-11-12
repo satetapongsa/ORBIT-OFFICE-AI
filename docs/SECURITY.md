@@ -150,8 +150,12 @@ descriptions are plain text in the UI (never HTML).
 ## 3c. Helpdesk, analytics and settings (Phase 8, implemented)
 
 - Tickets: `visible_tickets_condition` is the only visibility rule (read_all / read_own);
-  invisible tickets are 404. Internal notes and internal history events are filtered in SQL for
-  users without `tickets:comment_internal` (ADR-044).
+  invisible tickets are 404. Internal notes, internal attachments and internal history events
+  are filtered in SQL for users without `tickets:comment_internal` (ADR-044, ADR-054); an
+  internal file is 404 for them even with its ID.
+- Ticket attachments: PNG/JPEG accepted only for tickets, identified by signature (SVG, GIF and
+  others refused); always served as downloads with `nosniff`; image previews only via `blob:`
+  URLs; per-user upload limit; audited add/remove/download.
 - Analytics scopes are permission-bound (ADR-046); exports need `reports:export` as well and
   list only rows the reader can open; Excel cells starting with `=` are stored as text; PDF HTML
   is escaped. Every export is audited (`report.exported`, scope/period/row counts).
@@ -296,7 +300,8 @@ AI events (Phase 6): `ai.action_confirmed` (including failed and no-op runs),
 `ai.action_rejected`.
 
 Helpdesk and report events (Phase 8): `ticket.created`, `ticket.status_changed`,
-`ticket.assigned`, `ticket.updated`, `report.exported`.
+`ticket.assigned`, `ticket.updated`, `ticket.attachment_added|removed|downloaded`,
+`report.exported`.
 
 Planned events (later phases): system configuration changes.
 Every entry stores actor, IP, user agent and request ID.

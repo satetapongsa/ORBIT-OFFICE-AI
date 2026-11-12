@@ -483,3 +483,17 @@ The first administrator is created with `python -m app.cli create-admin` (passwo
 **Why.** One `docker compose up` deploys a hardened system on a single server; the same
 images can later move to an orchestrator.
 
+## ADR-054 — Ticket attachments with screenshots and internal files (2026-11-12)
+**Decision.** `ticket_attachments` (migration `0009`) reuses the upload pipeline of documents and
+task attachments (size checks, content sniffing, store-then-commit, objects under
+`tickets/{ticket}/{attachment}`). Besides PDF/DOCX/XLSX/TXT, tickets accept PNG and JPEG
+identified by their signature (`inspect_attachment`); images are never parsed. Anyone who sees
+the ticket may attach while it is not closed or cancelled (`tickets:manage` always);
+`is_internal` files need `tickets:comment_internal` and are invisible (404) to everyone else,
+like internal notes. Uploaders remove their own files while the ticket is open; IT removes any.
+Downloads are always `Content-Disposition: attachment` with `nosniff`; the UI previews images
+only through a `blob:` URL inside an `<img>`. Additions, removals and downloads are audited;
+public files notify the other party; the orphan sweep and backups include ticket files.
+**Why.** A screenshot of the error is the most useful thing a requester can give IT; documents
+keep their four formats because their text is extracted and indexed.
+
