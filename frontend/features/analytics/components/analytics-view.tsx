@@ -71,6 +71,7 @@ function label(map: Record<string, string>, key: string): string {
 
 function hours(value: number | null): string {
   if (value === null) return "—";
+  if (value < 1) return "ไม่ถึง 1 ชม.";
   if (value < 48) return `${numberFormat.format(value)} ชม.`;
   return `${numberFormat.format(Math.round((value / 24) * 10) / 10)} วัน`;
 }
