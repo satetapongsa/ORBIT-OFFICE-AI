@@ -56,6 +56,8 @@ const detail = (overrides: Partial<TicketDetail> = {}): TicketDetail => ({
     can_assign: false,
     can_comment: true,
     can_comment_internal: false,
+    can_attach: true,
+    can_attach_internal: false,
     allowed_statuses: ["CANCELLED"],
   },
   ...overrides,
@@ -86,6 +88,7 @@ function ticketApi(ticket: TicketDetail, extra: Parameters<typeof mockApi>[0] = 
           created_at: "2026-11-11T05:00:00Z",
         },
       ]),
+    "GET /api/v1/tickets/k-1/attachments": () => json([]),
     "GET /api/v1/tickets/assignees": () =>
       json([{ id: "u-it", display_name: "ไอที สมชาย", job_title: null, department: null }]),
     ...extra,
@@ -197,6 +200,8 @@ describe("TicketDetailView", () => {
         can_assign: true,
         can_comment: true,
         can_comment_internal: true,
+        can_attach: true,
+        can_attach_internal: true,
         allowed_statuses: ["IN_PROGRESS", "WAITING_FOR_USER", "RESOLVED", "CLOSED", "CANCELLED"],
       },
     });
