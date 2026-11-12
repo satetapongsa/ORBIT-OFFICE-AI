@@ -173,6 +173,19 @@ docker compose exec backend python -m app.cli reindex-documents --all
 Without an embedding provider, content search and the assistant still work with keyword
 (trigram) search.
 
+## 5b. E-mail (Phase 8)
+
+In Docker, backend and worker send mail to **Mailpit** (inbox at http://127.0.0.1:8025),
+so nothing leaves the machine. Notification e-mails are sent by the worker after the change is
+committed; each user chooses the types on "บัญชีของฉัน". For a real server set `SMTP_HOST`,
+`SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, `SMTP_STARTTLS`/`SMTP_SSL` (for
+containers: `SMTP_CONTAINER_HOST`, `SMTP_CONTAINER_PORT`, `SMTP_CONTAINER_STARTTLS`) and
+recreate backend and worker. With `SMTP_HOST` empty, e-mail is skipped and reset links are
+logged in development only.
+
+PDF reports need the WeasyPrint system libraries and Thai fonts from the backend image; after
+pulling Phase 8 rebuild it: `docker compose up -d --build backend worker`.
+
 ## 6. Troubleshooting
 
 | Symptom | Cause / fix |

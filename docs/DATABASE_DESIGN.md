@@ -218,8 +218,13 @@ Retention: `AI_CHAT_RETENTION_DAYS` is configured but the purge job is Phase 9.
 | --- | --- |
 | `tickets` | id, ticket_number (unique, human-readable `IT-2026-000123`), title, description, category (`COMPUTER`,`NETWORK`,`PRINTER`,`SOFTWARE`,`ACCOUNT_ACCESS`,`OTHER`), priority, status (`OPEN`,`IN_PROGRESS`,`WAITING_FOR_USER`,`RESOLVED`,`CLOSED`,`CANCELLED`), requester_id FK, assignee_id FK NULL, resolved_at, closed_at, deleted_at |
 | `ticket_comments` | id, ticket_id FK CASCADE, author_id, body, is_internal (bool — hidden from requester), created_at |
-| `ticket_attachments` | as task attachments |
-| `ticket_events` | status/assignment history |
+| `ticket_events` | status/assignment/priority/category/comment history, is_internal |
+
+Implemented in migration `0008`: sequence `ticket_number_seq`; trigram index on ticket
+titles; priority reuses the task priority values. `ticket_attachments` is not built yet.
+Notifications gained type `TICKET`, `email_status` (`PENDING`,`SENT`,`SKIPPED`,`FAILED`) and
+`emailed_at`; `notification_preferences` (user_id + type primary key, `email_enabled`) stores
+per-type e-mail choices (missing row = default).
 
 ## 7. Notifications and audit (Phase 2/8)
 

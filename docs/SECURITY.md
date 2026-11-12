@@ -147,6 +147,20 @@ descriptions are plain text in the UI (never HTML).
   digits of the national ID are accepted (DB `CHECK`). The UI loads someone else's record only
   after an explicit "แสดงข้อมูลบุคคล" click.
 
+## 3c. Helpdesk, analytics and settings (Phase 8, implemented)
+
+- Tickets: `visible_tickets_condition` is the only visibility rule (read_all / read_own);
+  invisible tickets are 404. Internal notes and internal history events are filtered in SQL for
+  users without `tickets:comment_internal` (ADR-044).
+- Analytics scopes are permission-bound (ADR-046); exports need `reports:export` as well and
+  list only rows the reader can open; Excel cells starting with `=` are stored as text; PDF HTML
+  is escaped. Every export is audited (`report.exported`, scope/period/row counts).
+- AI report summaries send aggregated numbers only, never record titles or names.
+- E-mail: sent only after commit, to the account address, per the user's preferences;
+  bodies are never logged. Reset links are never logged when SMTP is configured.
+- `/settings` role editing relies on the backend guards of §2 (grant only what you hold,
+  `ADMIN` locked, system roles not deletable).
+
 ## 4. File upload security (Phase 4, implemented)
 
 - Allow-list of extensions **and** content sniffing (PDF magic, OOXML archive layout —
@@ -271,7 +285,10 @@ Task events (Phase 5): `task.created`, `task.updated`, `task.status_changed`,
 AI events (Phase 6): `ai.action_confirmed` (including failed and no-op runs),
 `ai.action_rejected`.
 
-Planned events (later phases): ticket status changes, system configuration changes.
+Helpdesk and report events (Phase 8): `ticket.created`, `ticket.status_changed`,
+`ticket.assigned`, `ticket.updated`, `report.exported`.
+
+Planned events (later phases): system configuration changes.
 Every entry stores actor, IP, user agent and request ID.
 
 ## 9. Reporting a vulnerability
