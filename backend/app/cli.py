@@ -1,7 +1,12 @@
 """Operational commands.
 
-python -m app.cli sync-rbac      # permissions + system roles (safe in every environment)
-python -m app.cli seed-dev       # development departments and accounts (development only)
+python -m app.cli sync-rbac                 # permissions + system roles (safe everywhere)
+python -m app.cli seed-dev                  # development departments and accounts (dev only)
+python -m app.cli reindex-documents [--all] # queue search indexing
+python -m app.cli ensure-bucket             # create the storage bucket (deploy step)
+python -m app.cli purge [--dry-run]         # retention clean-up (also run daily by beat)
+python -m app.cli storage-export > files.tar  # all stored files as a tar stream (backups)
+python -m app.cli storage-import < files.tar  # restore stored files (backups)
 """
 
 from __future__ import annotations
@@ -65,16 +70,81 @@ def _reindex(include_ready: bool) -> int:
     return 0
 
 
+def _purge(dry_run: bool) -> int:
+    from app.core.storage import get_storage
+    from app.services.maintenance import purge
+
+    with sync_session_scope() as session:
+        report = purge(session, get_storage(), get_settings(), dry_run=dry_run)
+    label = "would remove" if dry_run else "removed"
+    print(f"purge: {label} " + ", ".join(f"{k}={v}" for k, v in report.as_dict().items()))
+    return 1 if report.errors else 0
+
+
+def _storage_export() -> int:
+    from app.core.storage import get_storage
+    from app.services.backup import export_objects
+
+    count = export_objects(get_storage(), sys.stdout.buffer)
+    sys.stdout.buffer.flush()
+    print(f"storage-export: {count} object(s)", file=sys.stderr)
+    return 0
+
+
+def _storage_import() -> int:
+    from app.core.storage import get_storage
+    from app.services.backup import import_objects
+
+    storage = get_storage()
+    storage.ensure_bucket(create=True)
+    restored, skipped = import_objects(storage, sys.stdin.buffer)
+    print(f"storage-import: restored {restored}, skipped {skipped}", file=sys.stderr)
+    return 0
+
+
+def _ensure_bucket() -> int:
+    from app.core.storage import get_storage
+
+    storage = get_storage()
+    storage.ensure_bucket(create=True)
+    print(f"ensure-bucket: '{storage.bucket}' is ready")
+    return 0
+
+
+COMMANDS = [
+    "ensure-bucket",
+    "sync-rbac",
+    "seed-dev",
+    "reindex-documents",
+    "purge",
+    "storage-export",
+    "storage-import",
+]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
-    parser.add_argument("command", choices=["sync-rbac", "seed-dev", "reindex-documents"])
+    parser.add_argument("command", choices=COMMANDS)
     parser.add_argument(
         "--all", action="store_true", help="reindex-documents: also rebuild READY indexes"
     )
+    parser.add_argument("--dry-run", action="store_true", help="purge: only count")
     args = parser.parse_args(argv)
-    if args.command == "reindex-documents":
-        return _reindex(include_ready=args.all)
-    return _sync_rbac() if args.command == "sync-rbac" else _seed_dev()
+    match args.command:
+        case "reindex-documents":
+            return _reindex(include_ready=args.all)
+        case "purge":
+            return _purge(dry_run=args.dry_run)
+        case "storage-export":
+            return _storage_export()
+        case "storage-import":
+            return _storage_import()
+        case "sync-rbac":
+            return _sync_rbac()
+        case "ensure-bucket":
+            return _ensure_bucket()
+        case _:
+            return _seed_dev()
 
 
 if __name__ == "__main__":
