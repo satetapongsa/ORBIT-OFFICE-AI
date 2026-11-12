@@ -13,7 +13,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 backend_in_docker() {
   (cd "$ROOT" && docker compose exec -T -e PYTHONDONTWRITEBYTECODE=1 \
-    -e AURA_RUN_INTEGRATION="${AURA_RUN_INTEGRATION:-}" backend "$@")
+    -e ORBIT_RUN_INTEGRATION="${ORBIT_RUN_INTEGRATION:-}" backend "$@")
 }
 
 if [[ "${CHECK_BACKEND_IN_DOCKER:-}" == "1" ]]; then

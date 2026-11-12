@@ -1,4 +1,4 @@
-# AURA OFFICE AI — local development stack.
+# ORBIT OFFICE AI — local development stack.
 #
 #   cp .env.example .env
 #   docker compose up --build            # postgres, redis, minio, migrate, backend, worker, frontend
@@ -7,11 +7,11 @@
 # Infrastructure only (run backend/frontend as local processes):
 #   docker compose up -d postgres redis minio
 
-name: aura-office
+name: orbit-office
 
 x-backend-env: &backend-env
   # Container-network hostnames override the localhost values used by local processes.
-  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aura}:${POSTGRES_PASSWORD:-aura_dev_password}@postgres:5432/${POSTGRES_DB:-aura_office}
+  DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD:-orbit_dev_password}@postgres:5432/${POSTGRES_DB:-orbit_office}
   REDIS_URL: redis://redis:6379/0
   STORAGE_ENDPOINT_URL: http://minio:9000
   # Development mail goes to Mailpit (web UI http://127.0.0.1:8025); set SMTP_CONTAINER_HOST
@@ -25,7 +25,7 @@ x-backend: &backend
     context: .
     dockerfile: infra/docker/backend.Dockerfile
     target: dev
-  image: aura-office-backend:dev
+  image: orbit-office-backend:dev
   env_file:
     - path: .env
       required: false
@@ -41,9 +41,9 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-aura}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aura_dev_password}
-      POSTGRES_DB: ${POSTGRES_DB:-aura_office}
+      POSTGRES_USER: ${POSTGRES_USER:-orbit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orbit_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-orbit_office}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -75,8 +75,8 @@ services:
     image: ${MINIO_IMAGE:-pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372}
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-aura-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-aura-minio-dev-secret}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-orbit-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-orbit-minio-dev-secret}
     ports:
       - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
@@ -147,7 +147,7 @@ services:
       context: .
       dockerfile: infra/docker/frontend.Dockerfile
       target: dev
-    image: aura-office-frontend:dev
+    image: orbit-office-frontend:dev
     environment:
       BACKEND_INTERNAL_URL: http://backend:8000
       WATCHPACK_POLLING: "true" # reliable file watching on Windows/macOS bind mounts

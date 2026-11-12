@@ -11,12 +11,12 @@ echo "==> backend liveness ($API)"
 curl -fsS "$API/api/v1/health/live" | grep -q '"status":"ok"' || fail "liveness"
 
 echo "==> backend readiness"
-code=$(curl -s -o /tmp/aura-ready.json -w '%{http_code}' "$API/api/v1/health")
-cat /tmp/aura-ready.json; echo
+code=$(curl -s -o /tmp/orbit-ready.json -w '%{http_code}' "$API/api/v1/health")
+cat /tmp/orbit-ready.json; echo
 [[ "$code" == "200" ]] || fail "readiness returned HTTP $code"
 
 echo "==> frontend page ($BASE)"
-curl -fsSL "$BASE/" | grep -q "AURA OFFICE AI" || fail "frontend page"  # / redirects to /dashboard
+curl -fsSL "$BASE/" | grep -q "ORBIT OFFICE AI" || fail "frontend page"  # / redirects to /dashboard
 
 echo "==> frontend → backend proxy"
 curl -fsS "$BASE/api/v1/health/live" | grep -q '"status":"ok"' || fail "proxy"

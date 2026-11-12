@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# AURA OFFICE AI — frontend image (Next.js).
+# ORBIT OFFICE AI — frontend image (Next.js).
 # Build context: repository root.
 
 ARG NODE_VERSION=22
@@ -35,10 +35,10 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     HOSTNAME=0.0.0.0 \
     PORT=3000
-RUN addgroup --system --gid 1001 aura && adduser --system --uid 1001 --ingroup aura aura
-COPY --from=builder --chown=aura:aura /app/.next/standalone ./
-COPY --from=builder --chown=aura:aura /app/.next/static ./.next/static
-COPY --from=builder --chown=aura:aura /app/public ./public
-USER aura
+RUN addgroup --system --gid 1001 orbit && adduser --system --uid 1001 --ingroup orbit orbit
+COPY --from=builder --chown=orbit:orbit /app/.next/standalone ./
+COPY --from=builder --chown=orbit:orbit /app/.next/static ./.next/static
+COPY --from=builder --chown=orbit:orbit /app/public ./public
+USER orbit
 EXPOSE 3000
 CMD ["node", "server.js"]
