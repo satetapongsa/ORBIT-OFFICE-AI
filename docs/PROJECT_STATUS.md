@@ -296,8 +296,10 @@
 - Nothing. All phases (0–9) are complete.
 
 ## Remaining
-- Go-live: either the single-host stack (`docs/DEPLOYMENT.md` sections 1-8) or Vercel + a
-  container host (section 9). The front end is on Vercel; the API side is not deployed yet.
+- Go-live: the front end is on Vercel; the API side is not deployed yet. Chosen next: free
+  Oracle Cloud Always Free VM + DuckDNS + Let's Encrypt running the single-host stack
+  (`docs/DEPLOYMENT.md` section 10); nginx's login limit is keyed by the Vercel-reported
+  visitor IP so all users do not share Vercel's addresses.
 - Not built (possible next work): due-date reminders, settings UI for AI / SMTP, OCR for
   scanned PDFs, antivirus scanning, browser-driven UI tests (Playwright).
 
