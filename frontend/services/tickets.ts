@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { apiRequest } from "@/services/api-client";
+import { apiDownload, apiRequest, ApiError } from "@/services/api-client";
 import { assignableUserSchema, taskPrioritySchema, type TaskPriority } from "@/services/tasks";
 
 /** Mirrors backend `app/schemas/tickets.py`. */
@@ -28,7 +28,10 @@ export const ticketEventTypeSchema = z.enum([
   "PRIORITY_CHANGED",
   "CATEGORY_CHANGED",
   "COMMENTED",
+  "ATTACHMENT_ADDED",
+  "ATTACHMENT_REMOVED",
 ]);
+export const ticketAttachmentTypeSchema = z.enum(["PDF", "DOCX", "XLSX", "TXT", "PNG", "JPEG"]);
 
 const userRefSchema = z.object({ id: z.string(), display_name: z.string() });
 
@@ -52,6 +55,8 @@ export const ticketCapabilitiesSchema = z.object({
   can_assign: z.boolean(),
   can_comment: z.boolean(),
   can_comment_internal: z.boolean(),
+  can_attach: z.boolean(),
+  can_attach_internal: z.boolean(),
   allowed_statuses: z.array(ticketStatusSchema),
 });
 
@@ -75,6 +80,17 @@ export const ticketCommentSchema = z.object({
   created_at: z.string(),
 });
 
+export const ticketAttachmentSchema = z.object({
+  id: z.string(),
+  original_filename: z.string(),
+  file_type: ticketAttachmentTypeSchema,
+  size_bytes: z.number().int().nonnegative(),
+  is_internal: z.boolean(),
+  uploaded_by: userRefSchema.nullable(),
+  created_at: z.string(),
+  can_delete: z.boolean(),
+});
+
 export const ticketEventSchema = z.object({
   id: z.string(),
   event_type: ticketEventTypeSchema,
@@ -93,6 +109,8 @@ export type TicketDetail = z.infer<typeof ticketDetailSchema>;
 export type TicketPage = z.infer<typeof ticketPageSchema>;
 export type TicketComment = z.infer<typeof ticketCommentSchema>;
 export type TicketEvent = z.infer<typeof ticketEventSchema>;
+export type TicketAttachment = z.infer<typeof ticketAttachmentSchema>;
+export type TicketAttachmentType = z.infer<typeof ticketAttachmentTypeSchema>;
 export type TicketScope = "mine" | "assigned" | "unassigned" | "all";
 export type TicketSort = "updated" | "created" | "priority";
 
@@ -121,6 +139,7 @@ export const ticketQueryKeys = {
   detail: (id: string) => ["tickets", "detail", id] as const,
   comments: (id: string) => ["tickets", "comments", id] as const,
   history: (id: string) => ["tickets", "history", id] as const,
+  attachments: (id: string) => ["tickets", "attachments", id] as const,
   assignees: ["tickets", "assignees"] as const,
 };
 
@@ -193,4 +212,50 @@ export function getTicketHistory(id: string, signal?: AbortSignal) {
 
 export function listTicketAssignees(signal?: AbortSignal) {
   return apiRequest("/tickets/assignees", { schema: z.array(assignableUserSchema), signal });
+}
+
+const attachmentPath = (id: string, attachmentId: string) =>
+  `${path(id)}/attachments/${encodeURIComponent(attachmentId)}`;
+
+export function listTicketAttachments(id: string, signal?: AbortSignal) {
+  return apiRequest(`${path(id)}/attachments`, {
+    schema: z.array(ticketAttachmentSchema),
+    signal,
+  });
+}
+
+export function uploadTicketAttachment(id: string, file: File, isInternal = false) {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("is_internal", String(isInternal));
+  return apiRequest(`${path(id)}/attachments`, {
+    method: "POST",
+    schema: z.array(ticketAttachmentSchema),
+    body: form,
+  });
+}
+
+export function deleteTicketAttachment(id: string, attachmentId: string) {
+  return apiRequest(attachmentPath(id, attachmentId), { method: "DELETE", schema: z.null() });
+}
+
+export function downloadTicketAttachment(id: string, attachment: TicketAttachment) {
+  return apiDownload(`${attachmentPath(id, attachment.id)}/download`, {
+    fallbackName: attachment.original_filename,
+  });
+}
+
+/** The image bytes for an in-page preview (shown only through a blob: URL in an <img>). */
+export async function fetchTicketImage(id: string, attachmentId: string): Promise<Blob> {
+  const response = await fetch(`/api/v1${attachmentPath(id, attachmentId)}/download`, {
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw new ApiError({
+      status: response.status,
+      code: "preview_failed",
+      message: "แสดงรูปไม่สำเร็จ",
+    });
+  }
+  return response.blob();
 }

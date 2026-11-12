@@ -1,5 +1,7 @@
 import type { TicketCategory, TicketEventType, TicketStatus } from "@/services/tickets";
 
+import { MAX_UPLOAD_BYTES } from "@/features/documents/labels";
+
 /** Same wording as the backend (`app/services/tickets/service.py`), e-mails and the assistant. */
 export const TICKET_STATUS_LABELS: Record<TicketStatus, string> = {
   OPEN: "รอรับเรื่อง",
@@ -27,7 +29,22 @@ export const TICKET_EVENT_LABELS: Record<TicketEventType, string> = {
   PRIORITY_CHANGED: "เปลี่ยนความสำคัญ",
   CATEGORY_CHANGED: "เปลี่ยนหมวด",
   COMMENTED: "ตอบกลับ",
+  ATTACHMENT_ADDED: "แนบไฟล์",
+  ATTACHMENT_REMOVED: "ลบไฟล์แนบ",
 };
+
+/** Ticket attachments: the document formats plus screenshots (the server sniffs content). */
+export const TICKET_ACCEPTED_FILES = ".pdf,.docx,.xlsx,.txt,.png,.jpg,.jpeg";
+const TICKET_EXTENSIONS = ["pdf", "docx", "xlsx", "txt", "png", "jpg", "jpeg"];
+export const MAX_TICKET_FILES_AT_CREATION = 5;
+
+export function checkTicketFile(file: File): string | null {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!TICKET_EXTENSIONS.includes(ext)) return "รองรับเฉพาะไฟล์ PDF, DOCX, XLSX, TXT, PNG และ JPG";
+  if (file.size === 0) return "ไฟล์ว่างเปล่า";
+  if (file.size > MAX_UPLOAD_BYTES) return "ไฟล์มีขนาดใหญ่เกิน 25 MB";
+  return null;
+}
 
 /** Wording for the requester's own status actions (they never see a raw status picker). */
 export const REQUESTER_ACTIONS: Partial<Record<TicketStatus, string>> = {

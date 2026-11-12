@@ -5,6 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TaskPriority } from "@/services/tasks";
 import { notificationQueryKeys } from "@/services/notifications";
 import {
+  deleteTicketAttachment,
+  listTicketAttachments,
+  uploadTicketAttachment,
   addTicketComment,
   assignTicket,
   changeTicketStatus,
@@ -108,6 +111,30 @@ export function useAddTicketComment(id: string) {
   return useMutation({
     mutationFn: ({ body, internal }: { body: string; internal: boolean }) =>
       addTicketComment(id, body, internal),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useTicketAttachments(id: string) {
+  return useQuery({
+    queryKey: ticketQueryKeys.attachments(id),
+    queryFn: ({ signal }) => listTicketAttachments(id, signal),
+  });
+}
+
+export function useUploadTicketAttachment(id: string) {
+  const invalidate = useInvalidateTickets();
+  return useMutation({
+    mutationFn: ({ file, internal }: { file: File; internal: boolean }) =>
+      uploadTicketAttachment(id, file, internal),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteTicketAttachment(id: string) {
+  const invalidate = useInvalidateTickets();
+  return useMutation({
+    mutationFn: (attachmentId: string) => deleteTicketAttachment(id, attachmentId),
     onSuccess: () => invalidate(),
   });
 }
