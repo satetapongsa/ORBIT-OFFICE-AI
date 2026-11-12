@@ -296,8 +296,9 @@
 - Nothing. All phases (0–9) are complete.
 
 ## Remaining
-- Go-live: the front end is on Vercel; the API side is not deployed yet. Chosen next: free
-  Oracle Cloud Always Free VM + DuckDNS + Let's Encrypt running the single-host stack
+- Go-live: the front end is on Vercel; the API side is not deployed yet. Chosen now: free
+  Render Blueprint (`render.yaml`, `app.serve_all`, Neon, R2; `docs/DEPLOYMENT.md` section 11,
+  ADR-056). Alternative: Oracle Cloud Always Free VM + DuckDNS + Let's Encrypt running the single-host stack
   (`docs/DEPLOYMENT.md` section 10); nginx's login limit is keyed by the Vercel-reported
   visitor IP so all users do not share Vercel's addresses.
 - Not built (possible next work): due-date reminders, settings UI for AI / SMTP, OCR for

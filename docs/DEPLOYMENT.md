@@ -316,3 +316,53 @@ secret); people use the Vercel address.
   `unattended-upgrades`.
 - Limits: one machine, no high availability (section 8); Vercel Hobby is for non-commercial
   use.
+
+## 11. Free hosting: Render Blueprint + Neon + R2 + Vercel (ADR-056)
+
+Everything is created from the dashboard; nothing runs on your own computer. `render.yaml`
+describes the API side, and every push to GitHub redeploys Render and Vercel.
+
+| Part | Service (free plan) |
+| --- | --- |
+| Pages | Vercel Hobby (section 9.2) |
+| API + worker + daily clean-up | Render free web service, one container: `python -m app.serve_all` |
+| Redis (queue, rate limits) | Render free Key Value (in memory) |
+| Database | Neon free PostgreSQL (pgvector included) — Render's free database is deleted after 30 days |
+| Files | Cloudflare R2 free 10 GB |
+| Keeping it awake | UptimeRobot (or any free monitor) every 5 minutes |
+
+### 11.1 Steps
+
+1. **Neon** (neon.tech): new project, region *AWS Asia Pacific (Singapore)*, copy the
+   connection string (`postgresql://…?sslmode=require`).
+2. **Cloudflare R2**: create the bucket `orbit-documents`; create an API token with
+   *Object Read & Write* on that bucket; note the access key, secret and the endpoint
+   `https://<account-id>.r2.cloudflarestorage.com`.
+3. **Render** (render.com, sign in with GitHub): New → **Blueprint** → choose this repository →
+   fill in the asked values (`DATABASE_URL`, `FRONTEND_BASE_URL`, `STORAGE_ENDPOINT_URL`,
+   `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`) → **Apply**. The first build takes several
+   minutes; migrations run on every start.
+4. **Vercel**: Settings → Environment Variables → `BACKEND_INTERNAL_URL` =
+   `https://orbit-office-api.onrender.com` (the address Render shows) and
+   `PROXY_SHARED_SECRET` = the value Render generated (service → Environment) → **Redeploy**.
+5. **First administrator**: Render service → **Shell** →
+   `python -m app.cli create-admin admin@company.com ชื่อ นามสกุล`.
+6. **Keep awake**: a free monitor on `https://orbit-office-api.onrender.com/api/v1/health/live`
+   every 5 minutes. One service awake all month uses about 744 of the 750 free hours.
+
+Checks as in section 9.3.
+
+### 11.2 Limits of the free layout
+
+1. 512 MB of memory for the API and worker together (measured: about 215 MB idle and 340 MB
+   after a document upload plus PDF and Excel reports). Very large spreadsheets or many uploads
+   at once can restart the container.
+2. Without the monitor the service sleeps after 15 minutes; the next visitor waits about a
+   minute, and queued documents wait until it wakes.
+3. Free Key Value keeps data in memory only: a restart drops queued jobs (re-run them with
+   "ประมวลผลใหม่" on the document) and rate-limit counters. Sessions are in PostgreSQL and
+   survive.
+4. Neon free: 0.5 GB of data; no point-in-time backups beyond Neon's short history. Export
+   regularly (`pg_dump` with the Neon URL) if the data matters.
+5. Free plans can change; check each provider's current terms. Vercel Hobby is for
+   non-commercial use.
