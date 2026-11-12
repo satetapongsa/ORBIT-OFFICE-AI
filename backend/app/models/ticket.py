@@ -1,4 +1,4 @@
-"""IT helpdesk: tickets, comments (public or internal) and the ticket timeline."""
+"""IT helpdesk: tickets, comments and attachments (public or internal) and the timeline."""
 
 from __future__ import annotations
 
@@ -6,7 +6,17 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Index, Sequence, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Index,
+    Sequence,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
@@ -54,6 +64,12 @@ class TicketEventType(StrEnum):
     PRIORITY_CHANGED = "PRIORITY_CHANGED"
     CATEGORY_CHANGED = "CATEGORY_CHANGED"
     COMMENTED = "COMMENTED"
+    ATTACHMENT_ADDED = "ATTACHMENT_ADDED"
+    ATTACHMENT_REMOVED = "ATTACHMENT_REMOVED"
+
+
+# Documents' four formats plus PNG/JPEG screenshots (see app.models.document.ImageType).
+TICKET_ATTACHMENT_TYPES: tuple[str, ...] = ("PDF", "DOCX", "XLSX", "TXT", "PNG", "JPEG")
 
 
 class Ticket(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
@@ -126,4 +142,36 @@ class TicketEvent(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (
         CheckConstraint(_in_check("event_type", TicketEventType), name="event_type"),
         Index("ix_ticket_events_ticket_created", "ticket_id", "created_at"),
+    )
+
+
+class TicketAttachment(UUIDPrimaryKeyMixin, Base):
+    """A file attached to a ticket; the object lives in storage under ``storage_key``."""
+
+    __tablename__ = "ticket_attachments"
+
+    ticket_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False
+    )
+    # Server-generated (tickets/{ticket_id}/{attachment_id}); never derived from user input.
+    storage_key: Mapped[str] = mapped_column(String(300), nullable=False, unique=True)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_type: Mapped[str] = mapped_column(String(10), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(150), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Internal files (e.g. logs, vendor quotes) are visible only to the IT team, like notes.
+    is_internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "file_type IN (" + ", ".join(f"'{t}'" for t in TICKET_ATTACHMENT_TYPES) + ")",
+            name="file_type",
+        ),
+        CheckConstraint("size_bytes >= 0", name="size_bytes"),
+        Index("ix_ticket_attachments_ticket_created", "ticket_id", "created_at"),
     )

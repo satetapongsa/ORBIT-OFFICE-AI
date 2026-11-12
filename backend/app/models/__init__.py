@@ -15,6 +15,7 @@ from app.models.document import (
     DocumentVersionText,
     DocumentVisibility,
     FileType,
+    ImageType,
     IndexStatus,
     PrincipalType,
     ProcessingStatus,
@@ -47,6 +48,7 @@ from app.models.task import (
 )
 from app.models.ticket import (
     Ticket,
+    TicketAttachment,
     TicketCategory,
     TicketComment,
     TicketEvent,
@@ -77,6 +79,7 @@ __all__ = [
     "EmploymentStatus",
     "EmploymentType",
     "FileType",
+    "ImageType",
     "IndexStatus",
     "Notification",
     "NotificationPreference",
@@ -96,6 +99,7 @@ __all__ = [
     "TaskPriority",
     "TaskStatus",
     "Ticket",
+    "TicketAttachment",
     "TicketCategory",
     "TicketComment",
     "TicketEvent",

@@ -62,6 +62,14 @@ class FileType(StrEnum):
     TXT = "TXT"
 
 
+class ImageType(StrEnum):
+    """Image formats accepted for ticket attachments only (screenshots); documents keep the
+    four text formats above because their text is extracted and indexed."""
+
+    PNG = "PNG"
+    JPEG = "JPEG"
+
+
 class ProcessingStatus(StrEnum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
