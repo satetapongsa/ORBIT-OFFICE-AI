@@ -1,6 +1,7 @@
-"""Celery application. Start a worker with::
+"""Celery application. Start a worker and the scheduler with::
 
     celery -A app.workers.celery_app worker --loglevel=INFO -Q default,documents
+    celery -A app.workers.celery_app beat --loglevel=INFO   # exactly one instance
 
 On Windows (local, non-Docker) add ``--pool=solo``.
 """
@@ -8,6 +9,7 @@ On Windows (local, non-Docker) add ``--pool=solo``.
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import setup_logging
 
 from app.core.config import get_settings
@@ -37,6 +39,15 @@ celery_app.conf.update(
     task_soft_time_limit=14 * 60,
     result_expires=24 * 3600,
     broker_connection_retry_on_startup=True,
+    beat_schedule={
+        # 03:15 Asia/Bangkok, a quiet hour for the office (ADR-051).
+        "daily-purge": {
+            "task": "maintenance.purge",
+            "schedule": crontab(hour=20, minute=15),
+            "options": {"queue": "default", "expires": 6 * 3600},
+        },
+    },
+    beat_schedule_filename="/tmp/celerybeat-schedule",  # noqa: S108 - container scratch
 )
 
 

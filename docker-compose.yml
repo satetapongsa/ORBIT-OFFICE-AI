@@ -1,7 +1,7 @@
 # ORBIT OFFICE AI — local development stack.
 #
 #   cp .env.example .env
-#   docker compose up --build            # postgres, redis, minio, migrate, backend, worker, frontend
+#   docker compose up --build            # postgres, redis, minio, migrate, backend, worker, beat, frontend
 #   docker compose --profile proxy up    # + nginx reverse proxy on http://localhost:${NGINX_PORT:-8080}
 #
 # Infrastructure only (run backend/frontend as local processes):
@@ -139,6 +139,17 @@ services:
       redis:
         condition: service_healthy
       minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  beat:
+    <<: *backend
+    # Scheduler for periodic jobs (daily retention clean-up). Run exactly one instance.
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
         condition: service_healthy
     restart: unless-stopped
 

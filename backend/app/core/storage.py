@@ -7,6 +7,8 @@ The bucket is private: objects are only reachable through the API after an ACL c
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from typing import Any, BinaryIO
 
@@ -37,6 +39,13 @@ class ObjectStream:
         self._body.close()
 
 
+@dataclass(frozen=True, slots=True)
+class StoredObject:
+    key: str
+    size: int
+    last_modified: datetime
+
+
 class ObjectStorage:
     def __init__(self, settings: Settings) -> None:
         self.bucket = settings.storage_bucket
@@ -61,14 +70,18 @@ class ObjectStorage:
         """Raise if the bucket is unreachable or missing."""
         self._client.head_bucket(Bucket=self.bucket)
 
-    def ensure_bucket(self) -> bool:
-        """Create the bucket in development if it does not exist. Returns True if it exists."""
+    def ensure_bucket(self, *, create: bool | None = None) -> bool:
+        """Create the bucket if it does not exist. Returns True if it exists.
+
+        By default only development creates it automatically; ``create=True`` is the explicit
+        deploy step (``python -m app.cli ensure-bucket``) for production."""
+        allowed = self._auto_create if create is None else create
         try:
             self.check_bucket()
             return True
         except ClientError as exc:
             error_code = str(exc.response.get("Error", {}).get("Code", ""))
-            if error_code not in {"404", "NoSuchBucket", "NotFound"} or not self._auto_create:
+            if error_code not in {"404", "NoSuchBucket", "NotFound"} or not allowed:
                 raise
         self._client.create_bucket(Bucket=self.bucket)
         logger.info("storage_bucket_created", bucket=self.bucket)
@@ -96,6 +109,21 @@ class ObjectStorage:
 
     def delete_object(self, key: str) -> None:
         self._client.delete_object(Bucket=self.bucket, Key=key)
+
+    def iter_objects(self, prefix: str = "") -> Iterator[StoredObject]:
+        """Every object in the bucket (paginated), for clean-up jobs and backups."""
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for item in page.get("Contents", []):
+                yield StoredObject(
+                    key=item["Key"], size=int(item["Size"]), last_modified=item["LastModified"]
+                )
+
+    def put_bytes(self, key: str, fileobj: BinaryIO, *, content_type: str) -> None:
+        """Restore an object as-is (backups); uploads use :meth:`put_object`."""
+        self._client.upload_fileobj(
+            fileobj, self.bucket, key, ExtraArgs={"ContentType": content_type}
+        )
 
 
 @lru_cache
