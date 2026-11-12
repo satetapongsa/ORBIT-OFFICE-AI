@@ -1,6 +1,6 @@
 # ORBIT OFFICE AI — PROJECT STATUS
 
-**Current Phase:** Phase 7 — RAG Knowledge Base — ✅ **COMPLETE** (verified 2026-11-12). Next: Phase 8.
+**Current Phase:** Phase 9 — Security, Testing & Deployment — ✅ **COMPLETE** (verified 2026-11-12). All phases 0–9 are complete; next: go-live on a server.
 **Last Updated:** 2026-11-12
 
 ## Completed
@@ -245,13 +245,38 @@
   / assignee / category / priority controls, internal notes highlighted), all modules enabled
   in the navigation (`CURRENT_PHASE = 8`).
 
+### Phase 9 — Security, Testing & Deployment
+- **Security review** (`docs/SECURITY.md` §9): automatic sweeps prove every one of the 95 API
+  operations except 7 public ones needs a session, and every state-changing one needs the CSRF
+  token; ACL/RAG/task/ticket isolation suites re-checked.
+- **Hardening**: rate limiter fails closed in production; per-user limits for uploads, exports
+  and AI summaries; Nginx login limit and non-spoofable `X-Forwarded-For` (ADR-049);
+  Content-Security-Policy and Permissions-Policy for pages and API (ADR-050); public readiness
+  shows only the overall status (`X-Health-Token` / `GET /health/details`); production refuses
+  weak or placeholder secrets, development credentials, insecure cookies, `DEBUG`,
+  `SEED_DEV_PASSWORD` and non-HTTPS URLs.
+- **Retention** (ADR-051): Celery `beat` service + `maintenance.purge` daily and
+  `python -m app.cli purge [--dry-run]` (soft-deleted documents and their files, orphaned files,
+  old chats, expired sessions/reset tokens, read notifications).
+- **Backups** (ADR-052): `scripts/backup.sh [--prod]` (pg_dump + all files + checksums),
+  `scripts/restore.sh` (verification restore into a separate database/bucket, or full restore
+  with `--yes`); import rejects unsafe archive names.
+- **Production** (ADR-053, `docs/DEPLOYMENT.md`): `docker-compose.prod.yml` (prod images,
+  non-root, only Nginx published, Redis password, log rotation, beat), HTTPS Nginx template
+  (TLS 1.2/1.3, HSTS, ACME webroot), `.env.production.example`, `create-admin` for the first
+  administrator, `ensure-bucket` in the migrate step.
+- **Tests**: `test_security_review.py`, `test_maintenance.py`, `test_bootstrap.py`, stricter
+  `test_config.py`, end-to-end workflows over real HTTP (`scripts/e2e-test.sh`), frontend CSP
+  and status-page tests.
+
 ## In Progress
-- Nothing. Phase 8 is complete.
+- Nothing. All phases (0–9) are complete.
 
 ## Remaining
-- Phase 9 per `docs/DEVELOPMENT_PHASES.md` (security review, purge jobs, backups, HTTPS,
-  production deployment).
-- Ticket attachments, due-date reminders and system settings beyond roles (not built).
+- Go-live on a real server (`docs/DEPLOYMENT.md`): DNS, certificate, `.env.production`, SMTP
+  provider, off-site backup schedule. Nothing has been deployed yet.
+- Not built (possible next work): ticket attachments, due-date reminders, settings UI for AI /
+  SMTP, OCR for scanned PDFs, antivirus scanning, browser-driven UI tests (Playwright).
 
 ## Technical Decisions
 See `docs/DECISIONS.md`. Key ones: same-origin API via proxy (ADR-002); psycopg 3 for async and
@@ -274,9 +299,36 @@ over server-sent events (ADR-040); retrieval with the ACL in SQL and hybrid rank
 fixed 1024-dimension embeddings and re-indexing (ADR-042); RAG through tools with citations
 (ADR-043); helpdesk visibility and internal notes (ADR-044); e-mail after commit with
 preferences (ADR-045); permission-bound analytics scopes (ADR-046); Excel/PDF exports
-(ADR-047); role editor on `/settings` (ADR-048).
+(ADR-047); role editor on `/settings` (ADR-048); fail-closed rate limiting (ADR-049); CSP
+without nonces (ADR-050); retention clean-up (ADR-051); backups with verified restore
+(ADR-052); single-host production stack (ADR-053).
 
 ## Tests
+### Phase 9 verification — 2026-11-12
+| Check (command) | Result |
+| --- | --- |
+| `CHECK_BACKEND_IN_DOCKER=1 ORBIT_RUN_INTEGRATION=1 bash scripts/check.sh` | ✅ all passed |
+| ruff check + format, mypy strict (128 files) | ✅ clean |
+| `pytest` (container, incl. integration + DB tests) | ✅ **318 passed**, 7 skipped (6 end-to-end tests run separately, 1 Windows-only) |
+| — `tests/api/test_security_review.py` | ✅ 12: inventory of 95 operations, **401 sweep** over every non-public route, **CSRF sweep** over every state-changing route, API security headers, readiness hidden/token/admin details, rate-limit guards on upload/export/summary routes, per-user export limit (429 + Retry-After), limiter fails closed (503) and open |
+| — `tests/api/test_maintenance.py` | ✅ 5: dry run, purge removes only expired data (documents + files, orphans after grace, chats, sessions, reset tokens, read notifications), idempotent, storage failure keeps the row for retry, backup export/import round trip, unsafe archive entries rejected |
+| — `tests/api/test_bootstrap.py` | ✅ 5: first admin can sign in with ADMIN+EMPLOYEE, audited, bad e-mail/weak passwords/duplicates refused |
+| — `tests/unit/test_config.py` | ✅ 18: production accepts a complete strong config and refuses each unsafe value (9 cases) |
+| `bash scripts/e2e-test.sh` (dev stack, through the Next.js proxy, real worker) | ✅ **6 passed** (twice): anonymous refusal + page CSP, task lifecycle + isolation, document upload → extraction/index → search, private document invisible to another department, download, admin-only delete; helpdesk with internal notes + notifications; report scopes + PDF; admin endpoints |
+| Frontend `vitest` | ✅ **92 passed** (new: page CSP/headers, status page admin details vs hidden summary) |
+| Frontend lint, typecheck, Prettier | ✅ |
+| `bash scripts/smoke-test.sh` | ✅ passed |
+| Backup / restore (dev) | ✅ `backup.sh` → verification restore into `orbit_restore_check` + bucket: all table counts equal, migration `0008`, 4 files byte-identical; scratch database and bucket removed |
+| Production stack on this machine (`docker-compose.prod.yml`, random secrets, self-signed TLS on :8443) | ✅ images built (backend + `next build`); migrate + sync-rbac + ensure-bucket; only Nginx published; containers non-root; HTTP→HTTPS 301; HSTS + CSP + Permissions-Policy; TLS ≤ 1.1 refused; `/api/docs` 404; public health without details, details with `X-Health-Token`; `create-admin` refuses a weak password then creates the admin; cookies Secure + HttpOnly (CSRF readable) + SameSite=Lax; upload processed and indexed by the prod worker and found by search; Thai PDF with Loma/Kinnari embedded; Nginx login burst → 429; `seed-dev` refused; purge dry run; `backup.sh --prod` + verification restore. The verification stack and its volumes were removed afterwards |
+
+### Phase 9 acceptance criteria
+| Criterion | Status |
+| --- | --- |
+| Critical workflows pass tests | ✅ unit/API/integration (318) + end-to-end over HTTP (6) + frontend (92) |
+| No known cross-permission data leakage in the test suite | ✅ route-wide auth/CSRF sweeps; ACL, RAG, task, ticket, HR, analytics isolation suites |
+| Deployment, environment configuration, backup and recovery documented | ✅ `docs/DEPLOYMENT.md`, `.env.production.example`, RUNBOOK §7a/§8, tested scripts |
+| Known limitations disclosed | ✅ `docs/DEPLOYMENT.md` §8 and Known Issues below |
+
 ### Phase 8 verification — 2026-11-12
 | Check (command) | Result |
 | --- | --- |
@@ -524,11 +576,11 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
    (SQLAlchemy). Not bypassed. Backend commands run in the container
    (`CHECK_BACKEND_IN_DOCKER=1 scripts/check.sh`, `docker compose exec backend …`).
 2. Password-reset e-mails go through SMTP when configured (Mailpit in Docker); with
-   `SMTP_HOST` empty the link is logged in development only. No production mail provider is
-   chosen yet (Phase 9).
-3. Login rate limiter fails open if Redis is unavailable (logged); review in Phase 9.
+   `SMTP_HOST` empty the link is logged in development only. Choose a production SMTP
+   provider at go-live (`docs/DEPLOYMENT.md`).
+3. Rate limiting fails open only in development/test; production fails closed (ADR-049).
 4. Object storage uses a third-party MinIO build (`pgsty/minio`, digest-pinned) — ADR-013.
-5. Readiness endpoint is unauthenticated and lists component status; review in Phase 9.
+5. Public readiness shows only the overall status in production (details: token or admin).
 6. Users and departments are managed in the Employee Center, roles on `/settings`; other system
    settings (AI provider, SMTP) are configured through `.env` only.
 7. The session gate is client-side (pages render after `/auth/me`); every API call is still
@@ -543,21 +595,20 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
 12. E-mail is plain text and per type only (no digest, no quiet hours); failed sends are not
     retried automatically (status `FAILED`).
 13. No OCR: scanned (image-only) PDFs finish `READY` with 0 characters; the UI says so.
-14. Objects of soft-deleted documents stay in storage; a purge job is planned for Phase 9.
+14. Soft-deleted documents and their files are purged after 30 days (daily job, ADR-051).
 15. Uploads are not scanned by an antivirus engine (type sniffing and zip checks only).
 16. The Celery worker does not auto-reload; restart it after backend changes
     (`docker compose restart worker`).
 17. Document search is `ILIKE` on title/description; content search arrives with RAG (Phase 7).
 18. Task attachments accept the document formats only (PDF, DOCX, XLSX, TXT) — no images yet.
-19. Objects of removed task attachments are deleted after the DB commit; a storage failure at
-    that moment leaves an orphaned object (logged). Purge job: Phase 9.
+19. Files left behind by failed uploads or storage errors are removed by the daily orphan
+    sweep after 24 hours.
 20. There are no due-date reminders for tasks yet.
 21. Tickets have no attachments yet (the DB design lists `ticket_attachments`).
 22. The assistant has not been run against a live model here (no Ollama or API key on this
     machine); adapters are tested against their wire formats and the full stack against a
     scripted stub. The Anthropic refusal-fallback beta is untested against the live API.
-23. Chat retention (`AI_CHAT_RETENTION_DAYS`) has no purge job yet (Phase 9); deleted chats are
-    soft-deleted.
+23. Deleted chats and chats idle longer than `AI_CHAT_RETENTION_DAYS` are purged daily.
 24. Analytics are computed per request (no caching or materialised views); fine at current
     scale. The AI summary has only been tested with a scripted model.
 25. Small local models may call tools poorly; choose a model with tool-calling support.
@@ -574,9 +625,17 @@ Commands actually executed (Windows 11, Python 3.15.2, Node 26.13):
     after pulling (`docker compose up -d --build backend worker`).
 31. Department analytics count tickets by the requester's current department; moving a person
     moves their past tickets in the figures.
+32. The page CSP allows inline scripts (Next.js without nonces, ADR-050).
+33. Not deployed to a real server yet; single-host design without high availability; production
+    risks in `docs/DEPLOYMENT.md` §8.
+34. No browser-driven UI tests (Playwright); UI flows were verified manually in the built-in
+    browser and the API workflows by `scripts/e2e-test.sh`.
+35. `e2e-test.sh` leaves closed "E2E …" tickets in the development database (tasks and
+    documents are deleted).
 
 ## Next Phase
-**Phase 9 — Security, Testing & Deployment**: see `docs/DEVELOPMENT_PHASES.md`.
+None — all planned phases are complete. Next step is go-live on a real server
+(`docs/DEPLOYMENT.md`), or new features from the "Remaining" list.
 
 ## Next Command
 Start the stack (one command per line in PowerShell; the smoke test via Git Bash):
@@ -586,10 +645,12 @@ docker compose up -d
 bash scripts/smoke-test.sh
 ```
 
-Then start the next session with:
+Deploy to a server (see `docs/DEPLOYMENT.md`):
 
-```
-Continue ORBIT OFFICE AI: read docs/PROJECT_STATUS.md and docs/DEVELOPMENT_PHASES.md, then execute PHASE 9 — SECURITY, TESTING & DEPLOYMENT as defined in docs/DEVELOPMENT_PHASES.md.
+```bash
+cp .env.production.example .env.production   # fill in every CHANGE_ME
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend python -m app.cli create-admin you@company.com ชื่อ นามสกุล
 ```
 
 ## Report format (end of every phase, in Thai)

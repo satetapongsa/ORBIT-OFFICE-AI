@@ -4,8 +4,10 @@
 tasks, documents, IT helpdesk, employee information, analytics and an AI
 assistant that answers only from company data the user is authorised to see.
 
-> Status: **Phase 2 — authentication & authorization** complete. Business modules are
-> delivered in later phases. See [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
+> Status: **all phases (0–9) complete** — dashboard, documents with permission-aware search,
+> tasks, employee center, IT helpdesk, notifications (in-app + e-mail), analytics and reports,
+> AI assistant with tools and RAG, production deployment. See
+> [`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md).
 
 ## Stack
 
@@ -31,6 +33,7 @@ docker compose exec backend python -m app.cli seed-dev   # development accounts
 - Readiness: http://127.0.0.1:8000/api/v1/health
 
 Running without Docker, tests and troubleshooting: [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+Production (HTTPS, first administrator, backups): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Repository layout
 
@@ -39,7 +42,8 @@ frontend/      Next.js application
 backend/       FastAPI application, Alembic migrations, Celery workers, tests
 infra/         Dockerfiles and Nginx configuration
 docs/          Architecture, database, API, security, phases, status, decisions, runbook
-scripts/       check.sh (all checks), smoke-test.sh (running stack)
+scripts/       check.sh (all checks), smoke-test.sh, e2e-test.sh (running stack),
+               backup.sh / restore.sh
 ```
 
 ## Documentation
@@ -55,9 +59,10 @@ scripts/       check.sh (all checks), smoke-test.sh (running stack)
 | [PROJECT_STATUS](docs/PROJECT_STATUS.md) | Current state |
 | [DECISIONS](docs/DECISIONS.md) | Architecture decision records |
 | [RUNBOOK](docs/RUNBOOK.md) | Setup, run, test, troubleshoot |
+| [DEPLOYMENT](docs/DEPLOYMENT.md) | Production deployment, backups, known risks |
 
 ## Security
 
-No real credentials belong in this repository. `.env` is git-ignored;
-`.env.example` contains development placeholders only. See
+No real credentials belong in this repository. `.env` and `.env.production` are git-ignored;
+`.env.example` and `.env.production.example` contain placeholders only. See
 [`docs/SECURITY.md`](docs/SECURITY.md).

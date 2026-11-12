@@ -431,3 +431,55 @@ roles. The UI disables permissions the editor does not hold (the backend still e
 ADR-018); `ADMIN` is locked; system role names come from `sync-rbac` and are not editable.
 **Why.** Roles are data (ADR-005); administrators need to manage them without the API docs.
 
+## ADR-049 — Rate limiting fails closed in production (2026-11-12)
+**Decision.** When Redis is unreachable the limiter allows requests in development/test and
+refuses them with 503 `rate_limiter_unavailable` in staging/production (`RATE_LIMIT_FAIL_OPEN`
+overrides). Besides login/reset (per account and per IP) and AI chat, uploads, report exports
+and AI summaries are limited per user (`UPLOAD_RATE_LIMIT`, `EXPORT_RATE_LIMIT`). Production
+Nginx adds an IP limit on the credential endpoints and overwrites `X-Forwarded-For` with the
+connecting address, so clients cannot spoof the IP the backend sees.
+**Why.** A cache outage must not silently switch brute-force protection off; expensive
+endpoints need a ceiling per account.
+
+## ADR-050 — Content-Security-Policy without nonces (2026-11-12)
+**Decision.** Pages get `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self'
+'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self';
+object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';
+upgrade-insecure-requests` from `next.config.ts` (`'unsafe-eval'`/websockets only in
+development). API responses get `default-src 'none'; frame-ancestors 'none'`. Both send
+`Permissions-Policy` (camera, microphone, geolocation, payment off).
+**Why.** Nonce-based CSP needs fully dynamic rendering, which Cache Components / partial
+prerendering do not allow (Next.js 16 docs). Inline scripts are therefore allowed; the code
+never renders raw HTML (no `dangerouslySetInnerHTML`), model output and documents are shown as
+plain text, and everything else is locked to the same origin.
+
+## ADR-051 — Retention clean-up with Celery beat (2026-11-12)
+**Decision.** A `beat` service schedules `maintenance.purge` daily at 03:15 Asia/Bangkok
+(`python -m app.cli purge [--dry-run]` by hand). It removes documents soft-deleted more than
+30 days ago (files first; the row stays for a retry if a file cannot be deleted), stored files
+that nothing references after 24 hours, deleted or idle chats (`AI_CHAT_RETENTION_DAYS`),
+expired sign-in sessions and reset tokens, and read notifications after a year. Audit logs are
+never purged.
+**Why.** Soft deletes and removed attachments otherwise keep personal data and files forever;
+every step is idempotent so a missed or repeated run is harmless.
+
+## ADR-052 — Backups: pg_dump plus a tar of stored files (2026-11-12)
+**Decision.** `scripts/backup.sh` writes `database.dump` (`pg_dump -Fc`) and `files.tar`
+(`python -m app.cli storage-export`, every object under its key) with SHA-256 checksums.
+`scripts/restore.sh` verifies checksums and either restores into a separate database and
+bucket (verification, live data untouched) or, with `--yes`, replaces the live data. Import
+refuses archive entries that are not plain files or whose names are absolute or contain empty,
+`.` or `..` segments.
+**Why.** Two portable files per backup, no extra tools in the images, and a restore that can be
+tested routinely without risk.
+
+## ADR-053 — Single-host production stack (2026-11-12)
+**Decision.** `docker-compose.prod.yml`: production images (non-root), only Nginx publishes
+ports, Redis requires a password, MinIO's console is off, logs rotate, `migrate` also creates
+the bucket. Configuration comes from `.env.production` (template with `CHANGE_ME`
+placeholders); the backend refuses unsafe production values. Public readiness shows only the
+overall status (`X-Health-Token` or `GET /health/details` with `system:configure` for details).
+The first administrator is created with `python -m app.cli create-admin` (password from stdin).
+**Why.** One `docker compose up` deploys a hardened system on a single server; the same
+images can later move to an orchestrator.
+

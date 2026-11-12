@@ -230,7 +230,19 @@ pulling Phase 8 rebuild it: `docker compose up -d --build backend worker`.
 docker compose down -v               # deletes postgres, redis, minio volumes
 ```
 
-## 8. Production (Phase 9)
+## 7a. Backups, clean-up and end-to-end tests (development)
 
-Production deployment, HTTPS, backups and secret management are documented in
-Phase 9. Until then, **do not deploy** this build to production.
+```bash
+bash scripts/backup.sh                                  # backups/<stamp>/ (git-ignored)
+bash scripts/restore.sh backups/<stamp> --database orbit_restore_check --bucket orbit-restore-check
+docker compose exec backend python -m app.cli purge --dry-run
+bash scripts/e2e-test.sh                                # needs seed-dev accounts
+```
+
+The `beat` service runs the daily clean-up; restart `worker` and `beat` after backend changes.
+`e2e-test.sh` writes data titled "E2E …" into the development database.
+
+## 8. Production
+
+See `docs/DEPLOYMENT.md` (configuration, TLS, first administrator, updates, backups and
+recovery, known risks).

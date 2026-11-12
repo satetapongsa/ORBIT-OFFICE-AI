@@ -165,7 +165,7 @@ Acceptance criteria
 - [x] Reports use real data and respect permissions; export works (Excel, PDF with Thai fonts).
 - [x] Tests cover the complete workflows.
 
-## Phase 9 — Security, testing & deployment ⬜
+## Phase 9 — Security, testing & deployment ✅
 
 Backend, frontend, integration and end-to-end tests; authentication,
 authorization, ACL and RAG-isolation reviews; upload security review; input
@@ -173,8 +173,14 @@ validation; rate limiting; CSRF/CORS review; error-handling and logging review;
 secret management; database backups; production deployment configuration;
 HTTPS; production documentation and known-risk disclosure.
 
+Delivered: route-wide authentication/CSRF sweeps, end-to-end workflow tests, fail-closed and
+per-user rate limits, CSP/Permissions-Policy, hidden public readiness details, retention jobs
+(Celery beat), backups with verified restore, production compose + HTTPS Nginx,
+`create-admin`, stricter production configuration checks (ADR-049…053,
+`docs/DEPLOYMENT.md`, security review in `docs/SECURITY.md` §9).
+
 Acceptance criteria
-- Critical workflows pass tests.
-- No known cross-permission data leakage in the test suite.
-- Deployment, environment configuration, backup and recovery documented.
-- Known limitations disclosed.
+- [x] Critical workflows pass tests.
+- [x] No known cross-permission data leakage in the test suite.
+- [x] Deployment, environment configuration, backup and recovery documented.
+- [x] Known limitations disclosed.

@@ -249,18 +249,28 @@ descriptions are plain text in the UI (never HTML).
 
 - HTTPS terminated at Nginx in production (HSTS, TLS 1.2+).
 - Security headers: `X-Content-Type-Options`, `X-Frame-Options: DENY`,
-  `Referrer-Policy: strict-origin-when-cross-origin`, a restrictive
-  `Content-Security-Policy` (Phase 9 tuning).
+  `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`,
+  `Cross-Origin-Opener-Policy` (API), `Content-Security-Policy` for pages and for the API
+  (ADR-050), HSTS (one year) on HTTPS.
 - CORS: the main app is same-origin and needs no CORS. `CORS_ORIGINS` is an
   explicit allow-list (empty by default); wildcard with credentials is never used.
-- Rate limiting (Redis): login, AI chat, upload, export endpoints (Phase 2/6/9).
+- Rate limiting (Redis): login and password reset (per account + per IP), AI chat and AI
+  summaries, uploads and report exports (per user); fails closed in production (ADR-049).
+  Production Nginx adds an IP limit on the credential endpoints and overwrites
+  `X-Forwarded-For` with the connecting address.
+- Readiness: production shows only the overall status publicly; component details need the
+  `X-Health-Token` header or `system:configure` (`GET /health/details`).
 
 ## 7. Secrets
 
 - No secrets in source code or images. `.env` is git-ignored; `.env.example`
   contains only placeholders and local-dev defaults.
-- The backend refuses to start in `production` with default/weak
-  `JWT_SECRET_KEY` or default storage credentials.
+- The backend refuses to start in `production` with a weak or development
+  `JWT_SECRET_KEY`, development database/storage credentials, any `CHANGE_ME` placeholder,
+  `COOKIE_SECURE=false`, `DEBUG=true`, `SEED_DEV_PASSWORD` set, or a non-HTTPS
+  `FRONTEND_BASE_URL`.
+- `.env.production` lives only on the server (`chmod 600`); the first administrator's password
+  is read from stdin by `create-admin`, never passed on the command line.
 - Logs never include passwords, tokens, API keys, cookies or document content.
 
 ## 8. Audit logging
@@ -291,7 +301,28 @@ Helpdesk and report events (Phase 8): `ticket.created`, `ticket.status_changed`,
 Planned events (later phases): system configuration changes.
 Every entry stores actor, IP, user agent and request ID.
 
-## 9. Reporting a vulnerability
+## 9. Phase 9 security review (2026-11-12)
+
+| Area | Result | Evidence |
+| --- | --- | --- |
+| Authentication on every endpoint | ✅ all 95 operations except 7 public ones (health, login, refresh, logout, password reset) return 401 without a session | `tests/api/test_security_review.py` (route sweep from the OpenAPI schema) |
+| CSRF | ✅ every state-changing endpoint returns 403 `csrf_failed` without the header | same file (route sweep) |
+| Authorisation / RBAC | ✅ permission tests per module; grant-only-what-you-hold; ADMIN locked | `test_authorization.py`, module tests |
+| Document ACL / RAG isolation | ✅ one predicate in list, detail, download, search, RAG and reports; model input checked | `test_document_access.py`, `test_rag.py`, `test_analytics.py` |
+| Tasks, tickets, HR data | ✅ visibility predicates, 404 for invisible records, internal notes filtered in SQL | `test_tasks.py`, `test_tickets.py`, `test_employees.py` |
+| Uploads | ✅ size limits at 4 layers, content sniffing, zip-bomb checks, private bucket, per-user rate limit; ⚠️ no antivirus | `test_documents.py`, `test_document_files.py` |
+| Input validation | ✅ Pydantic schemas with lengths/enums/patterns on every body and query; error envelope without internals | `test_errors.py` + module tests |
+| Rate limiting | ✅ login/reset/chat/uploads/exports/summaries; fail-closed in production | `test_security_review.py`, `test_auth.py` |
+| CORS | ✅ same-origin by default; explicit allow-list only, `*` refused | `test_config.py` |
+| Errors and logging | ✅ generic 500 with request ID; no passwords, tokens, cookies, e-mail bodies or document text in logs | `test_errors.py`, code review |
+| Secrets | ✅ production refuses defaults/placeholders; `.env*` git-ignored; secrets typed `SecretStr` | `test_config.py` |
+| Transport | ✅ HTTPS only (TLS 1.2+), HSTS, CSP, Secure/HttpOnly/SameSite cookies | `nginx.prod.conf.template`, `security-headers.test.ts` |
+| Backups | ✅ verified restore into a separate database/bucket; archive import rejects unsafe names | `test_maintenance.py`, RUNBOOK |
+| End-to-end | ✅ tasks, documents (worker + search isolation), helpdesk, reports, administration over real HTTP | `tests/e2e/test_workflows.py` |
+
+Accepted risks are listed in `docs/DEPLOYMENT.md` §8.
+
+## 10. Reporting a vulnerability
 
 Report internally to the system administrator. Do not open public issues for
 security problems.
