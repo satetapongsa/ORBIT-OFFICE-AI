@@ -5,11 +5,13 @@
 ARG PYTHON_VERSION=3.13
 
 FROM python:${PYTHON_VERSION}-slim AS base
+# XDG_CACHE_HOME: fontconfig (PDF reports) caches in /tmp, never inside the app directory.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    XDG_CACHE_HOME=/tmp/.cache
 WORKDIR /app
 RUN groupadd --system orbit && useradd --system --gid orbit --home-dir /app --no-create-home orbit
 # PDF reports (WeasyPrint): Pango/HarfBuzz for correct Thai shaping, plus Thai fonts.

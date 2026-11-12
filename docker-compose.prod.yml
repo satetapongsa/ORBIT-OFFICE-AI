@@ -1,0 +1,159 @@
+# ORBIT OFFICE AI — production stack (single host). See docs/DEPLOYMENT.md.
+#
+#   cp .env.production.example .env.production   # fill in every CHANGE_ME value
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Only Nginx publishes ports (80/443). PostgreSQL, Redis and MinIO stay on the internal
+# network; images run as non-root; the API docs are off; secrets come from .env.production.
+
+name: orbit-office-prod
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: infra/docker/backend.Dockerfile
+    target: prod
+  image: orbit-office-backend:${ORBIT_VERSION:-latest}
+  env_file:
+    - path: .env.production
+      required: true
+  environment:
+    ENVIRONMENT: production
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+    STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://minio:9000}
+    STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY}
+    STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY}
+  networks: [internal]
+  restart: unless-stopped
+  logging: &logging
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  minio:
+    # Bundled object storage. With managed S3 instead, set STORAGE_ENDPOINT_URL (empty for
+    # AWS), remove this service and the depends_on entries below (ADR-013).
+    image: ${MINIO_IMAGE:-pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372}
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_KEY}
+      MINIO_BROWSER: "off"
+    volumes:
+      - minio-data:/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *logging
+
+  migrate:
+    <<: *backend
+    # Migrations, permission catalogue and the storage bucket (idempotent, safe every deploy).
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && python -m app.cli sync-rbac && python -m app.cli ensure-bucket
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    restart: "no"
+
+  backend:
+    <<: *backend
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "-Q", "default,documents", "--concurrency=${WORKER_CONCURRENCY:-2}"]
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO"]
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+      target: prod
+    image: orbit-office-frontend:${ORBIT_VERSION:-latest}
+    networks: [internal]
+    depends_on:
+      backend: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  nginx:
+    image: nginx:1.27-alpine
+    environment:
+      ORBIT_DOMAIN: ${ORBIT_DOMAIN}
+    volumes:
+      - ./infra/nginx/nginx.prod.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_CERT_DIR:-./infra/nginx/certs}:/etc/nginx/certs:ro
+      - ${ACME_WEBROOT:-./infra/nginx/acme}:/var/www/certbot:ro
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    networks: [internal]
+    depends_on:
+      backend: { condition: service_healthy }
+      frontend: { condition: service_started }
+    restart: unless-stopped
+    logging: *logging
+
+networks:
+  internal:
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
