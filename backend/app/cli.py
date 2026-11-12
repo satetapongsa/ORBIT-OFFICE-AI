@@ -4,6 +4,7 @@ python -m app.cli sync-rbac                 # permissions + system roles (safe e
 python -m app.cli seed-dev                  # development departments and accounts (dev only)
 python -m app.cli reindex-documents [--all] # queue search indexing
 python -m app.cli ensure-bucket             # create the storage bucket (deploy step)
+python -m app.cli create-admin EMAIL FIRST LAST  # first administrator; password from stdin
 python -m app.cli purge [--dry-run]         # retention clean-up (also run daily by beat)
 python -m app.cli storage-export > files.tar  # all stored files as a tar stream (backups)
 python -m app.cli storage-import < files.tar  # restore stored files (backups)
@@ -111,7 +112,52 @@ def _ensure_bucket() -> int:
     return 0
 
 
+def _read_password() -> str:
+    """Hidden prompt on a terminal, otherwise the first line of stdin (scripts)."""
+    import getpass
+
+    if sys.stdin.isatty():
+        first = getpass.getpass("Password: ")
+        if first != getpass.getpass("Repeat password: "):
+            raise SystemExit("create-admin: passwords do not match")
+        return first
+    return sys.stdin.readline().rstrip("\r\n")
+
+
+def _create_admin(values: list[str], employee_code: str) -> int:
+    from app.core.errors import ValidationFailedError
+    from app.services.bootstrap import BootstrapError, create_admin
+
+    if len(values) != 3:
+        print("usage: python -m app.cli create-admin EMAIL FIRST_NAME LAST_NAME", file=sys.stderr)
+        return 2
+    email, first, last = values
+    password = _read_password()
+    try:
+        with sync_session_scope() as session:
+            user = create_admin(
+                session,
+                get_settings(),
+                email=email,
+                first_name=first,
+                last_name=last,
+                employee_code=employee_code,
+                password=password,
+            )
+            created = user.email
+    except BootstrapError as exc:
+        print(f"create-admin refused: {exc}", file=sys.stderr)
+        return 2
+    except ValidationFailedError as exc:
+        reasons = "; ".join(d.message for d in exc.details)
+        print(f"create-admin refused: {reasons}", file=sys.stderr)
+        return 2
+    print(f"create-admin: {created} created with roles ADMIN and EMPLOYEE")
+    return 0
+
+
 COMMANDS = [
+    "create-admin",
     "ensure-bucket",
     "sync-rbac",
     "seed-dev",
@@ -129,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         "--all", action="store_true", help="reindex-documents: also rebuild READY indexes"
     )
     parser.add_argument("--dry-run", action="store_true", help="purge: only count")
+    parser.add_argument("values", nargs="*", help="create-admin: EMAIL FIRST_NAME LAST_NAME")
+    parser.add_argument("--employee-code", default="ADM-0001", help="create-admin: employee code")
     args = parser.parse_args(argv)
     match args.command:
         case "reindex-documents":
@@ -143,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
             return _sync_rbac()
         case "ensure-bucket":
             return _ensure_bucket()
+        case "create-admin":
+            return _create_admin(args.values, args.employee_code)
         case _:
             return _seed_dev()
 

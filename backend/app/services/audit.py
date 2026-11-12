@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.core.principal import RequestMeta
 from app.models.audit import AuditLog
@@ -63,7 +64,7 @@ class AuditAction(StrEnum):
 
 
 def record(
-    session: AsyncSession,
+    session: AsyncSession | Session,
     action: AuditAction,
     *,
     actor_id: uuid.UUID | None,
