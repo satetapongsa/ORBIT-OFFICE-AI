@@ -302,6 +302,14 @@
   `tests/register-form.test.tsx` (4); browser: login → register → link from the dev log →
   confirm → dashboard as พนักงาน.
 
+### Supabase on the free layout (2026-11-19, ADR-058)
+- `render.yaml` and `docs/DEPLOYMENT.md` section 11 now use Supabase (database through the
+  session pooler + Storage S3 API) instead of Neon + R2; `STORAGE_REGION` is asked for.
+- Migration `0011` locks all tables from Supabase's Data API (RLS without policies, `anon` /
+  `authenticated` revoked). Verified on PostgreSQL with simulated `anon`: 31/31 tables with RLS,
+  `permission denied` for existing and later tables, downgrade/upgrade OK; backend suite green
+  apart from the pgvector-version RAG tests of this sandbox.
+
 ## In Progress
 - Nothing. All phases (0–9) are complete.
 

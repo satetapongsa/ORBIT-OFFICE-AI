@@ -317,7 +317,7 @@ secret); people use the Vercel address.
 - Limits: one machine, no high availability (section 8); Vercel Hobby is for non-commercial
   use.
 
-## 11. Free hosting: Render Blueprint + Neon + R2 + Vercel (ADR-056)
+## 11. Free hosting: Render Blueprint + Supabase + Vercel (ADR-056, ADR-058)
 
 Everything is created from the dashboard; nothing runs on your own computer. `render.yaml`
 describes the API side, and every push to GitHub redeploys Render and Vercel.
@@ -327,27 +327,40 @@ describes the API side, and every push to GitHub redeploys Render and Vercel.
 | Pages | Vercel Hobby (section 9.2) |
 | API + worker + daily clean-up | Render free web service, one container: `python -m app.serve_all` |
 | Redis (queue, rate limits) | Render free Key Value (in memory) |
-| Database | Neon free PostgreSQL (pgvector included) — Render's free database is deleted after 30 days |
-| Files | Cloudflare R2 free 10 GB |
+| Database | Supabase free PostgreSQL (pgvector included) — Render's free database is deleted after 30 days |
+| Files | Supabase Storage (S3-compatible API), private bucket |
 | Keeping it awake | UptimeRobot (or any free monitor) every 5 minutes |
+
+The application does **not** use Supabase Auth or the Supabase client libraries: the backend
+talks to the database and to Storage directly, with its own login and permissions. Migration
+`0011` turns on row level security without policies and revokes the `anon` / `authenticated`
+roles on every table, so the public Supabase API key cannot read anything.
 
 ### 11.1 Steps
 
-1. **Neon** (neon.tech): new project, region *AWS Asia Pacific (Singapore)*, copy the
-   connection string (`postgresql://…?sslmode=require`).
-2. **Cloudflare R2**: create the bucket `orbit-documents`; create an API token with
-   *Object Read & Write* on that bucket; note the access key, secret and the endpoint
-   `https://<account-id>.r2.cloudflarestorage.com`.
-3. **Render** (render.com, sign in with GitHub): New → **Blueprint** → choose this repository →
-   fill in the asked values (`DATABASE_URL`, `FRONTEND_BASE_URL`, `STORAGE_ENDPOINT_URL`,
-   `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`) → **Apply**. The first build takes several
-   minutes; migrations run on every start.
-4. **Vercel**: Settings → Environment Variables → `BACKEND_INTERNAL_URL` =
-   `https://orbit-office-api.onrender.com` (the address Render shows) and
-   `PROXY_SHARED_SECRET` = the value Render generated (service → Environment) → **Redeploy**.
-5. **First administrator**: Render service → **Shell** →
+1. **Supabase** (supabase.com, sign in with GitHub): **New project**, region *Southeast Asia
+   (Singapore)*, choose a strong database password and keep it.
+   - **Connect** → **Session pooler** → copy the string, put the database password in it and
+     append `?sslmode=require`. Render cannot reach the IPv6-only *Direct connection*, and the
+     *Transaction pooler* (port 6543) does not suit the application's connections.
+   - **Storage** → **New bucket** `orbit-documents`, **not** public.
+   - **Storage** → **S3 Configuration** (Project Settings → Storage): note the *Endpoint*
+     (`https://<ref>.supabase.co/storage/v1/s3`) and the *Region*; **New access key** gives the
+     access key id and secret (shown once).
+   - Recommended: **Project Settings → Data API** → turn the Data API off (the app does not use
+     it; migration 0011 locks the tables either way).
+2. **Render** (render.com, sign in with GitHub): New → **Blueprint** → choose this repository →
+   fill in the asked values: `DATABASE_URL` (the pooler string), `STORAGE_ENDPOINT_URL`,
+   `STORAGE_REGION`, `STORAGE_ACCESS_KEY`, `STORAGE_SECRET_KEY`, `FRONTEND_BASE_URL` (the Vercel
+   address, editable later) and `SELF_REGISTRATION_DOMAINS` (may stay empty while sign-up is
+   off) → **Apply**. The first build takes several minutes; migrations run on every start.
+3. **Vercel**: import the repository with root directory `frontend`; Settings → Environment
+   Variables → `BACKEND_INTERNAL_URL` = `https://orbit-office-api.onrender.com` (the address
+   Render shows) and `PROXY_SHARED_SECRET` = the value Render generated (service →
+   Environment) → **Redeploy**.
+4. **First administrator**: Render service → **Shell** →
    `python -m app.cli create-admin admin@company.com ชื่อ นามสกุล`.
-6. **Keep awake**: a free monitor on `https://orbit-office-api.onrender.com/api/v1/health/live`
+5. **Keep awake**: a free monitor on `https://orbit-office-api.onrender.com/api/v1/health/live`
    every 5 minutes. One service awake all month uses about 744 of the 750 free hours.
 
 Checks as in section 9.3.
@@ -362,7 +375,10 @@ Checks as in section 9.3.
 3. Free Key Value keeps data in memory only: a restart drops queued jobs (re-run them with
    "ประมวลผลใหม่" on the document) and rate-limit counters. Sessions are in PostgreSQL and
    survive.
-4. Neon free: 0.5 GB of data; no point-in-time backups beyond Neon's short history. Export
-   regularly (`pg_dump` with the Neon URL) if the data matters.
+4. Supabase free: 500 MB database, 1 GB of files, no automatic backups you can download, and the
+   project is **paused after 7 days without activity** (the API calls it while awake, so the
+   monitor in step 5 keeps it active; a paused project is restored from the Supabase
+   dashboard). Export regularly (`pg_dump` with the pooler URL and
+   `python -m app.cli storage-export`) if the data matters.
 5. Free plans can change; check each provider's current terms. Vercel Hobby is for
    non-commercial use.

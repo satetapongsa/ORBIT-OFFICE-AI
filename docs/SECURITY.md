@@ -22,6 +22,14 @@ cannot perform, but every API independently authenticates and authorises.
 | Self sign-up       | off by default (ADR-057); company domains only (`SELF_REGISTRATION_DOMAINS`); account created only after the e-mailed single-use link (SHA-256 in DB, 24 h) is confirmed, with the EMPLOYEE role only; same 202 answer for new and existing addresses; 5 per address / 20 per IP per window |
 | Brute force        | Redis fixed-window limits: 10 attempts / 15 min per e-mail and 50 per IP; 429 with `Retry-After`; generic error `อีเมลหรือรหัสผ่านไม่ถูกต้อง` for wrong password, unknown e-mail and inactive accounts. The limiter **fails open** if Redis is down (logged; readiness reports Redis) — reviewed in Phase 9 |
 
+## 1a. Hosted databases (Supabase)
+
+Migration `0011` enables row level security **without policies** on every table and revokes
+Supabase's `anon` / `authenticated` roles (including default privileges for later tables), so
+the public Supabase API key cannot read or change anything. Only the backend, connecting as
+the table owner, reaches the data. Turning off the Data API in the Supabase project is
+recommended as well (ADR-058).
+
 ## 2. Authorisation (RBAC)
 
 - Permission codes follow `domain:action`. The catalogue lives in code

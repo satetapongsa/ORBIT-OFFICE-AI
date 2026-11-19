@@ -545,3 +545,16 @@ Expired pending rows are removed by the daily purge.
 unconfirmed address must not be able to squat on a colleague's account, hence domain
 restriction, mandatory confirmation and the separate pending table. HR still assigns the
 department, job title and any higher role afterwards.
+
+## ADR-058 — Supabase for the database and files on the free layout (2026-11-19)
+**Decision.** The free Render layout (ADR-056) uses one Supabase project instead of Neon and
+Cloudflare R2: its PostgreSQL (pgvector) through the **session pooler**, and Supabase Storage
+through its S3-compatible API (the storage adapter already uses path-style addressing and
+SigV4). Supabase Auth and the Supabase client are not used; authentication stays in the
+backend. Migration `0011` enables row level security with no policies on every table and
+revokes the `anon`/`authenticated` roles (also as default privileges for later tables); the
+backend connects as the table owner and is unaffected, and on plain PostgreSQL nothing changes.
+**Why.** The user already works with Supabase and wanted fewer accounts and no payment card
+(R2 asks for one). Supabase exposes the `public` schema through its Data API with a public key,
+so tables created by Alembic would otherwise be readable by anyone, password hashes included.
+
