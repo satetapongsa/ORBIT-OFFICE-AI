@@ -208,9 +208,15 @@ def db(test_engine: Engine) -> Factory:
 class CapturingNotifier:
     def __init__(self) -> None:
         self.sent: list[dict[str, str]] = []
+        self.verifications: list[dict[str, str]] = []
 
     async def send_password_reset(self, *, email: str, display_name: str, reset_url: str) -> None:
         self.sent.append({"email": email, "reset_url": reset_url})
+
+    async def send_email_verification(
+        self, *, email: str, display_name: str, verify_url: str
+    ) -> None:
+        self.verifications.append({"email": email, "verify_url": verify_url})
 
 
 @pytest.fixture

@@ -31,7 +31,7 @@ from app.core.logging import get_logger
 from app.core.security import utcnow
 from app.core.storage import ObjectStorage
 from app.models.ai import ChatSession
-from app.models.auth import PasswordResetToken, UserSession
+from app.models.auth import PasswordResetToken, PendingRegistration, UserSession
 from app.models.document import Document, DocumentVersion
 from app.models.notification import Notification
 from app.models.task import TaskAttachment
@@ -48,6 +48,7 @@ class PurgeReport:
     chat_sessions: int = 0
     auth_sessions: int = 0
     reset_tokens: int = 0
+    pending_registrations: int = 0
     notifications: int = 0
     errors: int = 0
     dry_run: bool = False
@@ -162,6 +163,9 @@ def purge(
         PasswordResetToken,
         or_(PasswordResetToken.expires_at < auth, PasswordResetToken.used_at < auth),
         dry_run,
+    )
+    report.pending_registrations = _count_or_delete(
+        session, PendingRegistration, PendingRegistration.expires_at < now, dry_run
     )
 
     notes = now - timedelta(days=settings.notification_retention_days)

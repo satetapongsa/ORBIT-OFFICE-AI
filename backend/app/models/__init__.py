@@ -2,7 +2,7 @@
 
 from app.models.ai import ActionStatus, AiActionRequest, ChatMessage, ChatRole, ChatSession
 from app.models.audit import AuditLog
-from app.models.auth import PasswordResetToken, UserSession
+from app.models.auth import PasswordResetToken, PendingRegistration, UserSession
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.document import (
     AccessLevel,
@@ -85,6 +85,7 @@ __all__ = [
     "NotificationPreference",
     "NotificationType",
     "PasswordResetToken",
+    "PendingRegistration",
     "Permission",
     "PrincipalType",
     "ProcessingStatus",

@@ -31,6 +31,9 @@ PUBLIC = {
     ("POST", "/api/v1/auth/logout"),
     ("POST", "/api/v1/auth/password-reset/request"),
     ("POST", "/api/v1/auth/password-reset/confirm"),
+    ("GET", "/api/v1/auth/registration"),
+    ("POST", "/api/v1/auth/register"),
+    ("POST", "/api/v1/auth/verify-email"),
 }
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 

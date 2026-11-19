@@ -53,3 +53,26 @@ class PasswordResetToken(UUIDPrimaryKeyMixin, Base):
         Index("uq_password_reset_tokens_token_hash", "token_hash", unique=True),
         Index("ix_password_reset_tokens_user_id", "user_id"),
     )
+
+
+class PendingRegistration(UUIDPrimaryKeyMixin, Base):
+    """A self-service sign-up waiting for its e-mail address to be confirmed.
+
+    No ``users`` row exists until the link is used, so an unconfirmed sign-up can never block
+    the real owner of the address: registering again simply replaces the pending row.
+    """
+
+    __tablename__ = "pending_registrations"
+
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
+    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    __table_args__ = (
+        Index("uq_pending_registrations_token_hash", "token_hash", unique=True),
+        Index("uq_pending_registrations_email", "email", unique=True),
+    )

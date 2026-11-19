@@ -34,11 +34,15 @@ from app.schemas.auth import (
     MessageResponse,
     PasswordResetConfirm,
     PasswordResetRequest,
+    RegisterRequest,
+    RegistrationInfo,
     SessionInfo,
+    VerifyEmailRequest,
 )
 from app.schemas.common import ErrorResponse
 from app.schemas.identity import UserOut
 from app.services import auth as auth_service
+from app.services import registration as registration_service
 from app.services.auth import IssuedTokens
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -224,3 +228,55 @@ async def confirm_password_reset(
         db, settings, token=payload.token, new_password=payload.new_password, meta=meta
     )
     return MessageResponse(message="ตั้งรหัสผ่านใหม่เรียบร้อยแล้ว กรุณาเข้าสู่ระบบ")
+
+
+@router.get(
+    "/registration", response_model=RegistrationInfo, summary="Is self-service sign-up open?"
+)
+async def registration_info(settings: SettingsDep) -> RegistrationInfo:
+    enabled = settings.self_registration_enabled
+    return RegistrationInfo(
+        enabled=enabled, allowed_domains=settings.self_registration_domains if enabled else []
+    )
+
+
+@router.post(
+    "/register",
+    response_model=MessageResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Sign up with a company e-mail (sends a confirmation link)",
+    responses={403: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+async def register(
+    payload: RegisterRequest, request: Request, db: DbDep, settings: SettingsDep, meta: MetaDep
+) -> MessageResponse:
+    await registration_service.register(
+        db,
+        settings,
+        get_reset_notifier(request),
+        get_rate_limiter(request),
+        email=payload.email,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        password=payload.password,
+        meta=meta,
+    )
+    return MessageResponse(message=registration_service.REGISTER_ACCEPTED)
+
+
+@router.post(
+    "/verify-email",
+    response_model=MeResponse,
+    summary="Confirm the e-mail address, create the account and sign in",
+    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}},
+)
+async def verify_email(
+    payload: VerifyEmailRequest,
+    response: Response,
+    db: DbDep,
+    settings: SettingsDep,
+    meta: MetaDep,
+) -> MeResponse:
+    result = await registration_service.verify_email(db, settings, token=payload.token, meta=meta)
+    _set_session_cookies(response, settings, result.tokens)
+    return await _me(db, result.user, result.tokens)

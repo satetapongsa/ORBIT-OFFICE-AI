@@ -164,6 +164,7 @@ def test_dry_run_counts_without_removing(
         "chat_sessions": 2,
         "auth_sessions": 1,
         "reset_tokens": 1,
+        "pending_registrations": 0,
         "notifications": 1,
         "errors": 0,
         "dry_run": True,

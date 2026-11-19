@@ -44,7 +44,24 @@ export const changePasswordSchema = z
     path: ["password"],
   });
 
+const personName = (field: string) =>
+  z.string().trim().min(1, `กรุณากรอก${field}`).max(100, `${field}ยาวเกินไป`);
+
+export const registerSchema = z
+  .object({
+    first_name: personName("ชื่อ"),
+    last_name: personName("นามสกุล"),
+    email,
+    password: newPassword,
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, {
+    message: "รหัสผ่านทั้งสองช่องไม่ตรงกัน",
+    path: ["confirm"],
+  });
+
 export type LoginValues = z.infer<typeof loginSchema>;
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
+export type RegisterValues = z.infer<typeof registerSchema>;

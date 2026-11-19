@@ -49,6 +49,12 @@ services:
       # The Vercel address, e.g. https://orbit-office-ai.vercel.app (password-reset links).
       - key: FRONTEND_BASE_URL
         sync: false
+      # Self-service sign-up: "true" to open /register to the company domains below
+      # (e.g. mycompany.com). Confirmation links are e-mailed, so SMTP_* must be set too.
+      - key: SELF_REGISTRATION_ENABLED
+        value: "false"
+      - key: SELF_REGISTRATION_DOMAINS
+        sync: false
       # Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com
       - key: STORAGE_ENDPOINT_URL
         sync: false

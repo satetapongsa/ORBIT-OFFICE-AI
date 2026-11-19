@@ -8,6 +8,8 @@ const ACTION_LABELS: Record<string, string> = {
   "auth.password_changed": "เปลี่ยนรหัสผ่าน",
   "auth.password_reset_requested": "ขอรีเซ็ตรหัสผ่าน",
   "auth.password_reset_completed": "รีเซ็ตรหัสผ่านสำเร็จ",
+  "auth.registration_requested": "ขอสมัครสมาชิก",
+  "auth.registered": "สมัครสมาชิกและยืนยันอีเมล",
   "user.created": "สร้างบัญชีผู้ใช้",
   "user.updated": "แก้ไขข้อมูลผู้ใช้",
   "user.deactivated": "ระงับบัญชีผู้ใช้",

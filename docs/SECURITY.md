@@ -19,6 +19,7 @@ cannot perform, but every API independently authenticates and authorises.
 | Logout             | revokes the session family (all rotations), clears cookies, audit-logged; the still-unexpired access token stops working immediately |
 | Password change    | requires the current password; revokes every other session and issues fresh tokens for the current one |
 | Password reset     | single-use token (SHA-256 in DB, 30 min), older tokens invalidated, all sessions revoked on success; the request endpoint always answers 202 with the same message (no enumeration). Delivery: no mail adapter yet — in `development` the link is logged, elsewhere it is **not** logged and a warning says delivery is not configured |
+| Self sign-up       | off by default (ADR-057); company domains only (`SELF_REGISTRATION_DOMAINS`); account created only after the e-mailed single-use link (SHA-256 in DB, 24 h) is confirmed, with the EMPLOYEE role only; same 202 answer for new and existing addresses; 5 per address / 20 per IP per window |
 | Brute force        | Redis fixed-window limits: 10 attempts / 15 min per e-mail and 50 per IP; 429 with `Retry-After`; generic error `อีเมลหรือรหัสผ่านไม่ถูกต้อง` for wrong password, unknown e-mail and inactive accounts. The limiter **fails open** if Redis is down (logged; readiness reports Redis) — reviewed in Phase 9 |
 
 ## 2. Authorisation (RBAC)

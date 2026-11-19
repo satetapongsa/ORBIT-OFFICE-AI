@@ -527,3 +527,21 @@ container (measured: about 215 MB idle, 340 MB after an upload and PDF/Excel rep
 supervisor imports only the standard library to keep its own share small. The Compose stacks
 remain the recommended layout for real company use.
 
+## ADR-057 — Self-service sign-up with e-mail confirmation (2026-11-19)
+**Decision.** `/register` lets people create their own account, **off by default**
+(`SELF_REGISTRATION_ENABLED`). When on, `SELF_REGISTRATION_DOMAINS` must list the company
+e-mail domains (the backend refuses to start otherwise) and only those addresses may sign up.
+`POST /auth/register` checks the domain and password policy, then stores a row in
+`pending_registrations` (Argon2id password hash; link token as SHA-256 only, valid
+`EMAIL_VERIFICATION_TTL_HOURS`) and e-mails a single-use link. No `users` row exists until
+`POST /auth/verify-email` consumes the link: it creates the account with the **EMPLOYEE role
+only**, no department, an `SU-XXXXXXXX` employee code, and signs the user in. The answer to
+`register` is identical for new and existing addresses (no e-mail is sent for an existing
+account; the password is hashed in both cases so timing matches). Registering again replaces
+the pending row. Limits: 5 per address and 20 per IP per window, plus the Nginx auth zone.
+The verify page needs a button press so that mail scanners opening the link cannot use it up.
+Expired pending rows are removed by the daily purge.
+**Why.** The user asked for sign-up. An internal application must not accept strangers, and an
+unconfirmed address must not be able to squat on a colleague's account, hence domain
+restriction, mandatory confirmation and the separate pending table. HR still assigns the
+department, job title and any higher role afterwards.

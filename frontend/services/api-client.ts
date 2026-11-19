@@ -74,7 +74,14 @@ export const CSRF_COOKIE = "orbit_csrf";
 export const CSRF_HEADER = "X-CSRF-Token";
 const SAFE_METHODS = new Set<HttpMethod>(["GET"]);
 /** Auth endpoints never trigger the automatic refresh-and-retry. */
-const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/logout", "/auth/password-reset"];
+const NO_REFRESH_PATHS = [
+  "/auth/login",
+  "/auth/refresh",
+  "/auth/logout",
+  "/auth/password-reset",
+  "/auth/register",
+  "/auth/verify-email",
+];
 
 export function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;

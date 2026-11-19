@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { AuthCard } from "@/components/common/auth-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { LoginForm } from "@/features/auth/components/login-form";
+import { RegisterLink } from "@/features/auth/components/register-forms";
 
 export const metadata: Metadata = { title: "เข้าสู่ระบบ" };
 
@@ -13,6 +14,9 @@ export default function LoginPage() {
       <Suspense fallback={<Skeleton className="h-56 w-full" />}>
         <LoginForm />
       </Suspense>
+      <div className="mt-4">
+        <RegisterLink />
+      </div>
     </AuthCard>
   );
 }

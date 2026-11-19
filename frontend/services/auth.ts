@@ -76,6 +76,34 @@ export function confirmPasswordReset(
   });
 }
 
+export const registrationInfoSchema = z.object({
+  enabled: z.boolean(),
+  allowed_domains: z.array(z.string()),
+});
+export type RegistrationInfo = z.infer<typeof registrationInfoSchema>;
+
+export function getRegistrationInfo(signal?: AbortSignal): Promise<RegistrationInfo> {
+  return apiRequest("/auth/registration", { schema: registrationInfoSchema, signal });
+}
+
+export function register(input: {
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+}): Promise<{ message: string }> {
+  return apiRequest("/auth/register", { method: "POST", schema: messageSchema, body: input });
+}
+
+/** Confirms the e-mail address; the backend creates the account and signs the user in. */
+export function verifyEmail(token: string): Promise<Me> {
+  return apiRequest("/auth/verify-email", {
+    method: "POST",
+    schema: meSchema,
+    body: { token },
+  });
+}
+
 /** Only allow same-site relative redirects (blocks `//evil.com` and `javascript:` URLs). */
 export function safeRedirectPath(next: string | null | undefined, fallback = "/"): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) {

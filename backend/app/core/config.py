@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     export_rate_limit: int = Field(default=20, ge=1)  # report exports per user per window
     export_rate_limit_window_seconds: int = Field(default=600, ge=10)
     frontend_base_url: str = "http://127.0.0.1:3000"  # used in password-reset links
+    # Self-service sign-up (ADR-057). Off by default; when on, only e-mail addresses in
+    # SELF_REGISTRATION_DOMAINS may register, the address must be confirmed through a
+    # single-use link, and the new account gets the EMPLOYEE role only.
+    self_registration_enabled: bool = False
+    self_registration_domains: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    email_verification_ttl_hours: int = Field(default=24, ge=1, le=168)
     # Password for development seed accounts (`python -m app.cli seed-dev`). Never used in prod.
     seed_dev_password: SecretStr | None = None
 
@@ -187,6 +193,15 @@ class Settings(BaseSettings):
     def _blank_is_unset(cls, value: object) -> object:
         return None if isinstance(value, str) and not value.strip() else value
 
+    @field_validator("self_registration_domains", mode="before")
+    @classmethod
+    def _split_domains(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.split(",")
+        if isinstance(value, list):
+            return [str(d).strip().lower().lstrip("@") for d in value if str(d).strip()]
+        return value
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_csv(cls, value: object) -> object:
@@ -200,6 +215,11 @@ class Settings(BaseSettings):
             raise ValueError("RAG_CHUNK_OVERLAP must be smaller than RAG_CHUNK_SIZE")
         if "*" in self.cors_origins:
             raise ValueError("CORS_ORIGINS must be an explicit allow-list; '*' is not allowed")
+        if self.self_registration_enabled and not self.self_registration_domains:
+            raise ValueError(
+                "SELF_REGISTRATION_DOMAINS must list the company e-mail domains "
+                "(e.g. example.com) when SELF_REGISTRATION_ENABLED is true"
+            )
         if self.ai_embedding_provider is AIProvider.ANTHROPIC:
             raise ValueError(
                 "AI_EMBEDDING_PROVIDER=anthropic is not supported: Anthropic has no embeddings "

@@ -80,6 +80,11 @@ server {
         proxy_pass http://orbit_backend;
     }
 
+    location ~ ^/api/v1/auth/(register|verify-email)$ {
+        limit_req zone=orbit_auth burst=5 nodelay;
+        proxy_pass http://orbit_backend;
+    }
+
     location ^~ /api/v1/auth/password-reset {
         limit_req zone=orbit_auth burst=5 nodelay;
         proxy_pass http://orbit_backend;

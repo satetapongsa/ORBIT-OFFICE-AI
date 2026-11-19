@@ -292,6 +292,16 @@
   verified on Vercel/Railway themselves (needs the user's accounts): the header transform,
   25 MB uploads and streamed answers through Vercel's proxy.
 
+### Self-service sign-up (2026-11-19, ADR-057)
+- `/register` and `/verify-email` pages; "สมัครสมาชิก" link on `/login` only while sign-up is
+  open. API: `GET /auth/registration`, `POST /auth/register`, `POST /auth/verify-email`;
+  migration `0010` (`pending_registrations`). Off by default — set
+  `SELF_REGISTRATION_ENABLED=true` and `SELF_REGISTRATION_DOMAINS=<company domain>` (plus SMTP
+  outside development). New accounts get the EMPLOYEE role only; HR assigns the rest.
+- Verified: `tests/api/test_registration.py` (9), security route review updated,
+  `tests/register-form.test.tsx` (4); browser: login → register → link from the dev log →
+  confirm → dashboard as พนักงาน.
+
 ## In Progress
 - Nothing. All phases (0–9) are complete.
 

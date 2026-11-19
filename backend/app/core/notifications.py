@@ -1,4 +1,4 @@
-"""Delivery of security messages (password reset links).
+"""Delivery of security messages (password reset and e-mail confirmation links).
 
 With SMTP configured (``SMTP_HOST``) the link is e-mailed. Without it, in ``development`` the
 link is written to the server log so the flow can be exercised locally; in every other
@@ -20,6 +20,10 @@ class PasswordResetNotifier(Protocol):
         self, *, email: str, display_name: str, reset_url: str
     ) -> None: ...
 
+    async def send_email_verification(
+        self, *, email: str, display_name: str, verify_url: str
+    ) -> None: ...
+
 
 class LogPasswordResetNotifier:
     def __init__(self, settings: Settings) -> None:
@@ -30,6 +34,14 @@ class LogPasswordResetNotifier:
             logger.info("password_reset_link_dev_only", email=email, reset_url=reset_url)
         else:
             logger.warning("password_reset_delivery_not_configured")
+
+    async def send_email_verification(
+        self, *, email: str, display_name: str, verify_url: str
+    ) -> None:
+        if self._dev:
+            logger.info("email_verification_link_dev_only", email=email, verify_url=verify_url)
+        else:
+            logger.warning("email_verification_delivery_not_configured")
 
 
 class MailPasswordResetNotifier:
@@ -63,6 +75,34 @@ class MailPasswordResetNotifier:
             )
         except MailError:
             logger.warning("password_reset_email_failed")
+
+    async def send_email_verification(
+        self, *, email: str, display_name: str, verify_url: str
+    ) -> None:
+        import anyio
+
+        from app.core.mail import MailError, send_mail
+
+        hours = self._settings.email_verification_ttl_hours
+        text = "\n".join(
+            [
+                f"เรียน คุณ{display_name}",
+                "",
+                "ขอบคุณที่สมัครใช้งาน ORBIT OFFICE AI",
+                f"กดลิงก์นี้ภายใน {hours} ชั่วโมงเพื่อยืนยันอีเมลและเปิดใช้งานบัญชี:",
+                verify_url,
+                "",
+                "หากคุณไม่ได้สมัคร ให้เพิกเฉยต่ออีเมลนี้ จะไม่มีบัญชีใดถูกสร้างขึ้น",
+            ]
+        )
+        try:
+            await anyio.to_thread.run_sync(
+                lambda: send_mail(
+                    self._settings, to=email, subject="[ORBIT] ยืนยันอีเมลของคุณ", text=text
+                )
+            )
+        except MailError:
+            logger.warning("email_verification_email_failed")
 
 
 def build_reset_notifier(settings: Settings) -> PasswordResetNotifier:

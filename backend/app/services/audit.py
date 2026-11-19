@@ -25,6 +25,8 @@ class AuditAction(StrEnum):
     PASSWORD_CHANGED = "auth.password_changed"  # noqa: S105 - audit action name
     PASSWORD_RESET_REQUESTED = "auth.password_reset_requested"  # noqa: S105
     PASSWORD_RESET_COMPLETED = "auth.password_reset_completed"  # noqa: S105
+    REGISTRATION_REQUESTED = "auth.registration_requested"
+    USER_REGISTERED = "auth.registered"
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DEACTIVATED = "user.deactivated"
