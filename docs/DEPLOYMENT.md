@@ -358,7 +358,12 @@ roles on every table, so the public Supabase API key cannot read anything.
    Variables → `BACKEND_INTERNAL_URL` = `https://orbit-office-api.onrender.com` (the address
    Render shows) and `PROXY_SHARED_SECRET` = the value Render generated (service →
    Environment) → **Redeploy**.
-4. **First administrator**: Render service → **Shell** →
+4. **First administrator** (the free plan has no Shell): Render service → **Environment** →
+   add `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (password policy applies) and
+   optionally `ADMIN_BOOTSTRAP_FIRST_NAME` / `ADMIN_BOOTSTRAP_LAST_NAME` → **Save, rebuild, and
+   deploy**. The log shows `bootstrap-admin: … created`. Sign in, change the password on
+   **บัญชีของฉัน**, then delete `ADMIN_BOOTSTRAP_PASSWORD`. The step never touches an account
+   that already exists. With a paid plan the Shell also works:
    `python -m app.cli create-admin admin@company.com ชื่อ นามสกุล`.
 5. **Keep awake**: a free monitor on `https://orbit-office-api.onrender.com/api/v1/health/live`
    every 5 minutes. One service awake all month uses about 744 of the 750 free hours.

@@ -7,6 +7,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.identity import Permission, Role, User, UserRole, role_permissions
 
@@ -27,6 +28,11 @@ async def get_by_id(
 
 async def get_by_email(session: AsyncSession, email: str) -> User | None:
     return await session.scalar(_live().where(func.lower(User.email) == email.strip().lower()))
+
+
+def get_by_email_sync(session: Session, email: str) -> User | None:
+    """Sync variant for CLI commands."""
+    return session.scalar(_live().where(func.lower(User.email) == email.strip().lower()))
 
 
 async def email_taken(

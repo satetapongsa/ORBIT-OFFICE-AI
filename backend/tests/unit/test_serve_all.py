@@ -63,6 +63,7 @@ def test_sets_up_then_runs_api_and_worker_and_stops_both_when_one_ends(
         ["alembic", "upgrade", "head"],
         ["app.cli", "sync-rbac"],
         ["app.cli", "ensure-bucket"],
+        ["app.cli", "bootstrap-admin"],
     ]
     api, worker = started
     assert api.args[1:4] == ["-m", "uvicorn", "app.main:app"]

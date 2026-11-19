@@ -558,3 +558,12 @@ backend connects as the table owner and is unaffected, and on plain PostgreSQL n
 (R2 asks for one). Supabase exposes the `public` schema through its Data API with a public key,
 so tables created by Alembic would otherwise be readable by anyone, password hashes included.
 
+## ADR-059 — First administrator from environment variables (2026-11-19)
+**Decision.** `python -m app.cli bootstrap-admin` runs as the last setup step of
+`app.serve_all`. With `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` set it creates that
+account with ADMIN + EMPLOYEE (same checks as `create-admin`); if the account exists it does
+nothing, so a password changed in the app is never reset. Without the variables, or when the
+password fails the policy, it prints why and returns 0 so the API still starts.
+**Why.** Render's free plan has no Shell, so `create-admin` cannot be run there. The password
+should be removed from the environment after the first sign-in.
+

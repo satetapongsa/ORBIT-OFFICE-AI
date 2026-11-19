@@ -26,6 +26,7 @@ SETUP_STEPS = (
     ("alembic", "upgrade", "head"),
     ("app.cli", "sync-rbac"),
     ("app.cli", "ensure-bucket"),
+    ("app.cli", "bootstrap-admin"),  # no-op unless ADMIN_BOOTSTRAP_* are set
 )
 
 

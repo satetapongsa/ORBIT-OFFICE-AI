@@ -156,7 +156,52 @@ def _create_admin(values: list[str], employee_code: str) -> int:
     return 0
 
 
+def _bootstrap_admin() -> int:
+    """First administrator from environment variables, for hosts without a shell (ADR-059).
+
+    Runs on every start of ``app.serve_all``. Does nothing unless ADMIN_BOOTSTRAP_EMAIL and
+    ADMIN_BOOTSTRAP_PASSWORD are set, and nothing once that account exists, so it never
+    changes a password that was changed in the app. Never stops the container: problems are
+    printed and the API starts anyway.
+    """
+    import os
+
+    from app.core.errors import ValidationFailedError
+    from app.repositories.users import get_by_email_sync
+    from app.services.bootstrap import BootstrapError, create_admin
+
+    email = (os.environ.get("ADMIN_BOOTSTRAP_EMAIL") or "").strip()
+    password = os.environ.get("ADMIN_BOOTSTRAP_PASSWORD") or ""
+    if not email or not password:
+        print("bootstrap-admin: ADMIN_BOOTSTRAP_EMAIL/PASSWORD not set, skipped")
+        return 0
+    first = (os.environ.get("ADMIN_BOOTSTRAP_FIRST_NAME") or "").strip() or "Admin"
+    last = (os.environ.get("ADMIN_BOOTSTRAP_LAST_NAME") or "").strip() or "ORBIT"
+    try:
+        with sync_session_scope() as session:
+            if get_by_email_sync(session, email) is not None:
+                print(f"bootstrap-admin: {email} already exists, nothing to do")
+                return 0
+            user = create_admin(
+                session,
+                get_settings(),
+                email=email,
+                first_name=first,
+                last_name=last,
+                employee_code="ADM-0001",
+                password=password,
+            )
+            print(f"bootstrap-admin: {user.email} created with roles ADMIN and EMPLOYEE")
+    except BootstrapError as exc:
+        print(f"bootstrap-admin refused: {exc}", file=sys.stderr)
+    except ValidationFailedError as exc:
+        reasons = "; ".join(d.message for d in exc.details)
+        print(f"bootstrap-admin refused: {reasons}", file=sys.stderr)
+    return 0
+
+
 COMMANDS = [
+    "bootstrap-admin",
     "create-admin",
     "ensure-bucket",
     "sync-rbac",
@@ -193,6 +238,8 @@ def main(argv: list[str] | None = None) -> int:
             return _ensure_bucket()
         case "create-admin":
             return _create_admin(args.values, args.employee_code)
+        case "bootstrap-admin":
+            return _bootstrap_admin()
         case _:
             return _seed_dev()
 
