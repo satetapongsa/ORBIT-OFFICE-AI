@@ -57,6 +57,20 @@ services:
         value: "false"
       - key: SELF_REGISTRATION_DOMAINS
         sync: false
+      # AI assistant through Groq (OpenAI-compatible API). Only the key is secret: add
+      # AI_CHAT_API_KEY (gsk_...) in the dashboard, never in this file. Without it the
+      # assistant answers that no AI provider is configured. Groq has no embeddings API, so
+      # document search for the assistant stays keyword-based.
+      - key: AI_CHAT_PROVIDER
+        value: openai_compatible
+      - key: AI_CHAT_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: AI_CHAT_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_CHAT_MAX_TOKENS
+        value: "8192"
+      - key: AI_CHAT_API_KEY
+        sync: false
       # Supabase → Storage → S3 Configuration: https://<ref>.supabase.co/storage/v1/s3
       - key: STORAGE_ENDPOINT_URL
         sync: false
