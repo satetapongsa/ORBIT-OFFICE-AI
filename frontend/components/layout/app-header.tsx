@@ -1,4 +1,5 @@
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { QuickAsk } from "@/features/assistant/components/quick-ask";
 import { UserMenu } from "@/features/auth/components/user-menu";
 import { NotificationBell } from "@/features/notifications/components/notification-bell";
 import { SystemStatusIndicator } from "@/features/system-status/components/system-status-indicator";
@@ -9,6 +10,7 @@ export function AppHeader() {
       <MobileNav />
       <div className="flex-1" />
       <SystemStatusIndicator />
+      <QuickAsk />
       <NotificationBell />
       <UserMenu />
     </header>

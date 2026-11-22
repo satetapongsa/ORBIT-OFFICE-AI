@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, StringConstraints
 
 from app.api.deps import (
     DbDep,
@@ -15,9 +16,11 @@ from app.api.deps import (
     SettingsDep,
     get_chat_provider,
     get_rate_limiter,
+    per_user_rate_limit,
     require_permissions,
 )
 from app.core.db import get_async_session_factory
+from app.core.errors import AINotConfiguredError
 from app.core.permissions import P
 from app.core.principal import CurrentUser
 from app.core.rate_limit import RateLimiter
@@ -31,8 +34,9 @@ from app.schemas.ai import (
     ChatSessionUpdate,
     SendMessage,
 )
-from app.services.ai import chat
+from app.services.ai import chat, quick
 from app.services.ai.providers.base import ChatProvider
+from app.services.ai.quick import QUICK_QUESTION_MAX_CHARS
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -131,3 +135,41 @@ async def reject_action(
     action_id: uuid.UUID, db: DbDep, meta: MetaDep, user: ChatUser
 ) -> ActionOut:
     return await chat.reject_action(db, user, action_id, meta)
+
+
+class QuickQuestion(BaseModel):
+    question: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=QUICK_QUESTION_MAX_CHARS),
+    ]
+
+
+limit_quick = per_user_rate_limit(
+    "ai-quick",
+    lambda s: s.ai_chat_rate_limit_messages,
+    lambda s: s.ai_chat_rate_limit_window_seconds,
+)
+
+
+@router.post(
+    "/quick",
+    response_class=StreamingResponse,
+    summary="One-off question to the AI (nothing is stored); the answer streams as SSE",
+    dependencies=[Depends(limit_quick)],
+)
+async def quick_answer(
+    body: QuickQuestion,
+    db: DbDep,
+    settings: SettingsDep,
+    user: ChatUser,
+    provider: ProviderDep,
+) -> StreamingResponse:
+    if provider is None:
+        raise AINotConfiguredError()
+    # Nothing below uses the database: give the connection back before the answer streams.
+    await db.close()
+    return StreamingResponse(
+        quick.stream_answer(provider, body.question, timezone=settings.app_timezone),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"},
+    )

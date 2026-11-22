@@ -642,3 +642,19 @@ were already unsent (their text had been erased, so nothing is lost), restores t
 `char_length(body) BETWEEN 1 AND 4000` check and drops the column. Editing my own messages
 (any time, "แก้ไขแล้ว") stays, again behind a pencil button next to the message.
 
+## ADR-066 — "ถาม AI": one-off general questions from the header (2026-11-23)
+**Decision.** A round button in the header (top right, next to the notifications bell) opens a
+small panel for everyday questions on any topic. `POST /ai/quick {question}` (needs `ai:chat`,
+1–2,000 characters, limited like assistant messages) streams the answer as server-sent events
+from the same chat model as the rest of the application (Groq in the free layout), with a
+general-knowledge system prompt (answer first, short plain paragraphs, no Markdown, say when
+unsure, today's date in Asia/Bangkok), **without tools and without company data**. It is
+stateless: each request carries only the one question, nothing is written to the database or
+the audit log and the text is not logged; the panel shows one question and its answer, a new
+question replaces it and closing the panel forgets it. The client also strips stray Markdown
+markers and renders paragraphs; the answer can be stopped or copied. The database connection
+is returned before the answer streams.
+**Why.** The user wanted a quick, simple chatbot for general questions that does not keep
+anything; work questions stay with the full assistant (`/assistant`), which has tools,
+permissions and history.
+
