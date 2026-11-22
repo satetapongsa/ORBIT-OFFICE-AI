@@ -345,6 +345,23 @@ def test_read_document_respects_access(
     assert read["text"] == SALARY and read["truncated"] is False and read["source"] == 1
 
 
+def test_read_document_explains_files_without_text(
+    env: Env, as_user: AsUser, provider: ScriptedProvider
+) -> None:
+    client = as_user(["EMPLOYEE"])
+    doc = upload(client, "สื่อการสอน", "ข้อความชั่วคราว")
+    with env.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE document_version_texts SET content = '' WHERE document_version_id = :v"),
+            {"v": uuid.UUID(doc["versions"][0]["id"])},
+        )
+    provider.turns += [call("read_document", {"document_id": doc["id"]}), say("ไฟล์เป็นภาพ")]
+    ask(client, "สรุปเอกสารนี้ให้หน่อย")
+    read = provider.tool_results()[0]["data"]
+    assert read["text"] == "" and read["total_characters"] == 0
+    assert "OCR" in read["note"]
+
+
 def test_document_tools_need_documents_read(
     env: Env, as_user: AsUser, provider: ScriptedProvider, db: Factory
 ) -> None:

@@ -285,6 +285,21 @@ async def _read_document(ctx: ToolContext, args: BaseModel) -> dict[str, Any]:
         page=None,
     )
     content = text.content[:READ_DOCUMENT_CHARS]
+    if not content.strip():
+        # Usually a scanned PDF or pages exported as pictures: there is nothing to summarise.
+        return {
+            "source": number,
+            "title": detail.title,
+            "link": f"/documents/{detail.id}",
+            "total_characters": 0,
+            "text": "",
+            "note": (
+                "The file contains no readable text — it is most likely a scanned document or "
+                "pages saved as images, and text recognition (OCR) is not supported. Tell the "
+                "user this plainly, do not guess the content, and suggest uploading a version "
+                "with selectable text (e.g. the original DOCX, or a PDF exported as text)."
+            ),
+        }
     return {
         "source": number,
         "title": detail.title,
