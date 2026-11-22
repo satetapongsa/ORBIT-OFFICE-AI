@@ -77,3 +77,31 @@ def test_system_prompt_states_the_local_date() -> None:
     prompt = system_prompt("Asia/Bangkok", datetime(2026, 11, 22, 18, 0, tzinfo=UTC))
     assert "23 พฤศจิกายน 2569" in prompt  # already the next day in Bangkok
     assert "2026-11-23" in prompt
+
+
+def test_quick_questions_can_use_a_cheaper_model(as_user: AsUser, api_app: FastAPI) -> None:
+    main, cheap = ScriptedProvider(model="main-model"), ScriptedProvider(model="cheap-model")
+    api_app.state.chat_provider = main
+    api_app.state.quick_provider = cheap
+    client = as_user(["EMPLOYEE"])
+    cheap.turns.append(say("ตอบสั้นๆ"))
+    stream = events(client.post(QUICK, json={"question": "สวัสดี"}).text)
+    assert stream[-1][0] == "done"
+    assert len(cheap.requests) == 1 and main.requests == []  # main assistant model untouched
+
+
+def test_quick_provider_settings() -> None:
+    from app.services.ai.providers import build_quick_provider
+    from tests.conftest import make_settings
+
+    groq = {
+        "ai_chat_provider": "openai_compatible",
+        "ai_chat_base_url": "https://api.groq.com/openai/v1",
+        "ai_chat_model": "openai/gpt-oss-120b",
+    }
+    assert build_quick_provider(make_settings(**groq)) is None  # not set: main model is used
+    quick = build_quick_provider(make_settings(**groq, ai_quick_model="llama-3.1-8b-instant"))
+    assert quick is not None and quick.model == "llama-3.1-8b-instant"
+    assert quick._max_tokens == 1024  # type: ignore[attr-defined]
+    disabled = make_settings(ai_quick_model="llama-3.1-8b-instant")
+    assert build_quick_provider(disabled) is None  # no AI provider configured at all

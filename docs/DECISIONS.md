@@ -657,4 +657,8 @@ is returned before the answer streams.
 **Why.** The user wanted a quick, simple chatbot for general questions that does not keep
 anything; work questions stay with the full assistant (`/assistant`), which has tools,
 permissions and history.
+**Update (2026-11-23).** Quick questions can use a cheaper model: `AI_QUICK_MODEL` (same
+provider, URL and key as `AI_CHAT_*`, answers capped by `AI_QUICK_MAX_TOKENS`, default 1024).
+The Render Blueprint sets it to Groq's `llama-3.1-8b-instant`; empty means the main model.
+The full assistant is unchanged.
 

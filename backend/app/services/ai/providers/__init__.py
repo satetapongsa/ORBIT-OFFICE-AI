@@ -35,3 +35,18 @@ def build_chat_provider(settings: Settings) -> ChatProvider | None:
         timeout_seconds=settings.ai_request_timeout_seconds,
         api_key=(settings.ai_chat_api_key.get_secret_value() if settings.ai_chat_api_key else None),
     )
+
+
+def build_quick_provider(settings: Settings) -> ChatProvider | None:
+    """Provider for one-off "ถาม AI" questions: AI_QUICK_MODEL on the chat provider's
+    connection, with a small answer budget. ``None`` = use the main chat provider."""
+    if not settings.ai_quick_model:
+        return None
+    return build_chat_provider(
+        settings.model_copy(
+            update={
+                "ai_chat_model": settings.ai_quick_model,
+                "ai_chat_max_tokens": settings.ai_quick_max_tokens,
+            }
+        )
+    )

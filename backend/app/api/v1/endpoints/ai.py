@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, StringConstraints
 
@@ -159,11 +159,14 @@ limit_quick = per_user_rate_limit(
 )
 async def quick_answer(
     body: QuickQuestion,
+    request: Request,
     db: DbDep,
     settings: SettingsDep,
     user: ChatUser,
     provider: ProviderDep,
 ) -> StreamingResponse:
+    # AI_QUICK_MODEL (a cheaper, faster model) when configured, otherwise the main model.
+    provider = getattr(request.app.state, "quick_provider", None) or provider
     if provider is None:
         raise AINotConfiguredError()
     # Nothing below uses the database: give the connection back before the answer streams.

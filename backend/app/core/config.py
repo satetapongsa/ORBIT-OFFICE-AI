@@ -128,6 +128,10 @@ class Settings(BaseSettings):
     ai_chat_history_messages: int = Field(default=40, ge=4, le=200)
     ai_chat_max_tool_steps: int = Field(default=6, ge=1, le=20)
     ai_action_ttl_minutes: int = Field(default=15, ge=1, le=1440)
+    # Optional cheaper/faster model for the "ถาม AI" quick questions (same provider, URL and
+    # key as AI_CHAT_*), e.g. llama-3.1-8b-instant on Groq. Empty = use AI_CHAT_MODEL.
+    ai_quick_model: str | None = None
+    ai_quick_max_tokens: int = Field(default=1024, ge=128, le=8192)
 
     ai_embedding_provider: AIProvider = AIProvider.DISABLED
     ai_embedding_model: str | None = None

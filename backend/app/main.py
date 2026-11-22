@@ -27,7 +27,7 @@ from app.core.rate_limit import RedisRateLimiter
 from app.core.redis import close_redis, get_redis
 from app.core.storage import ObjectStorage, get_storage
 from app.services.ai.embeddings import build_embedding_provider
-from app.services.ai.providers import build_chat_provider
+from app.services.ai.providers import build_chat_provider, build_quick_provider
 from app.services.documents.service import CeleryDocumentProcessor
 
 logger = get_logger(__name__)
@@ -85,6 +85,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.document_storage = ObjectStorage(settings)
     app.state.document_processor = CeleryDocumentProcessor()
     app.state.chat_provider = build_chat_provider(settings)
+    app.state.quick_provider = build_quick_provider(settings)
     app.state.chat_hub = build_chat_hub(
         settings.redis_url.get_secret_value(),
         in_memory=settings.environment is Environment.TEST,
