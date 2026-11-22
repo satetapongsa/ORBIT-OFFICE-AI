@@ -596,3 +596,20 @@ sees "กำลังพิมพ์…" while the signal is under 6 s old; the 
 **Why.** Requested by the user ("like Messenger"). Database time on both sides avoids clock
 skew between browsers and the API.
 
+## ADR-062 — Real-time chat delivery by long polling (2026-11-23)
+**Decision.** Each user has a version number in Redis (`orbit:chat:ver:<user>`), increased
+after the commit of every change that concerns them (message: both participants; read
+receipt: both; typing: the other person). One request per browser tab,
+`GET /chat/events?since=<version>&wait=25`, answers as soon as the version differs (or after
+25 s); the client then refetches the chat queries on screen and asks again. One Redis
+pub/sub subscription per API process wakes that process's waiting requests (works with
+several workers); waiters also re-check every 5 s, and if Redis is down the endpoint degrades
+to slow polling. The request gives its database connection back before waiting. Sending is
+optimistic: the sender sees the message at once ("กำลังส่ง…"), sends are queued in order,
+and a failure puts the text back in the box. The 3 s polling was replaced by a 30–60 s
+safety-net refresh. Measured locally (two browsers): receiver sees a message 0.10–0.25 s after
+Enter, own message 0.02–0.07 s, typing indicator 0.09 s; server wake-up ≈1 ms.
+**Why.** The user asked for delivery within a fraction of a second. WebSockets cannot pass
+through Vercel's `/api` rewrite to the API host and need sticky connections; long polling is
+plain HTTP, works through Vercel, Nginx and Render, and uses fewer requests than fast polling.
+

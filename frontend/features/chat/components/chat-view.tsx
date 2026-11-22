@@ -29,14 +29,22 @@ import {
   startConversation,
   type ChatMessage,
   type Conversation,
+  type MessagePage,
 } from "@/services/chat";
 
-/** New messages appear by polling: simple, and works on hosts without WebSockets. */
-const THREAD_POLL_MS = 3_000;
+/**
+ * Live updates arrive through the app-wide long poll (useChatRealtime, ADR-062); these
+ * intervals are only a safety net if that connection is interrupted.
+ */
+const THREAD_POLL_MS = 30_000;
 /** At most one "typing" signal per this interval (the server shows it for 6 s). */
 const TYPING_PING_MS = 3_000;
-const LIST_POLL_MS = 10_000;
+const LIST_POLL_MS = 30_000;
+/** "กำลังพิมพ์…" expires on the server after 6 s without a new signal. */
+const TYPING_EXPIRY_MS = 6_500;
 const PAGE_SIZE = 50;
+/** Ids of optimistic messages that the server has not confirmed yet. */
+const PENDING_PREFIX = "pending-";
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -160,6 +168,8 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState("");
+  // Optimistic messages: shown at once, marked "กำลังส่ง…" until the server confirms.
+  const [pending, setPending] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastPingRef = useRef(0);
   const now = useNow(30_000);
@@ -172,10 +182,10 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
 
   const messages = useMemo(() => {
     const seen = new Set<string>();
-    return [...older, ...(latest.data?.items ?? [])].filter((m) =>
+    return [...older, ...(latest.data?.items ?? []), ...pending].filter((m) =>
       seen.has(m.id) ? false : (seen.add(m.id), true),
     );
-  }, [older, latest.data]);
+  }, [older, latest.data, pending]);
   const newestId = messages.at(-1)?.id;
   const otherReadAt = latest.data?.other_last_read_at ?? null;
   const otherTyping = latest.data?.other_typing ?? false;
@@ -184,7 +194,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
 
   // Mark as read whenever a new message shows up, then refresh the badges.
   useEffect(() => {
-    if (!newestId) return;
+    if (!newestId || newestId.startsWith(PENDING_PREFIX)) return;
     void markConversationRead(conversation.id)
       .then(() =>
         Promise.all([
@@ -198,6 +208,13 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [newestId, otherTyping]);
+
+  // No event is sent when the other person simply stops typing: re-check once it would expire.
+  useEffect(() => {
+    if (!otherTyping) return;
+    const timer = setTimeout(() => void latest.refetch(), TYPING_EXPIRY_MS);
+    return () => clearTimeout(timer);
+  }, [otherTyping, latest.data, latest]);
 
   // Keep the conversation list's ✓/✓✓ and "กำลังพิมพ์…" in step with the open thread.
   useEffect(() => {
@@ -213,17 +230,32 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     }
   }
 
+  // Sends go out one after another so quick messages keep their order.
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const messagesKey = chatQueryKeys.messages(conversation.id);
   const send = useMutation({
-    mutationFn: (body: string) => sendMessage(conversation.id, body),
-    onSuccess: async () => {
-      setDraft("");
-      lastPingRef.current = 0;
-      await Promise.all([
-        client.invalidateQueries({ queryKey: chatQueryKeys.messages(conversation.id) }),
-        client.invalidateQueries({ queryKey: chatQueryKeys.conversations }),
-      ]);
+    mutationFn: ({ body }: { body: string; tempId: string }) => {
+      const run = queueRef.current
+        .catch(() => undefined)
+        .then(() => sendMessage(conversation.id, body));
+      queueRef.current = run;
+      return run;
     },
-    onError: (error) => toast.error(errorText(error, "ส่งข้อความไม่สำเร็จ กรุณาลองใหม่")),
+    onSuccess: (saved, { tempId }) => {
+      // Put the stored message in the cache before dropping the optimistic copy (no flicker).
+      client.setQueryData<MessagePage>(messagesKey, (page) =>
+        page && !page.items.some((m) => m.id === saved.id)
+          ? { ...page, items: [...page.items, saved] }
+          : page,
+      );
+      setPending((current) => current.filter((m) => m.id !== tempId));
+      void client.invalidateQueries({ queryKey: chatQueryKeys.conversations });
+    },
+    onError: (error, { body, tempId }) => {
+      setPending((current) => current.filter((m) => m.id !== tempId));
+      setDraft((current) => current || body);
+      toast.error(errorText(error, "ส่งข้อความไม่สำเร็จ กรุณาลองใหม่"));
+    },
   });
 
   async function loadOlder() {
@@ -243,8 +275,21 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
 
   function submit() {
     const body = draft.trim();
-    if (!body || send.isPending) return;
-    send.mutate(body);
+    if (!body) return;
+    setDraft("");
+    lastPingRef.current = 0;
+    const tempId = `${PENDING_PREFIX}${crypto.randomUUID()}`;
+    setPending((current) => [
+      ...current,
+      {
+        id: tempId,
+        conversation_id: conversation.id,
+        sender_id: myId ?? "",
+        body,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    send.mutate({ body, tempId });
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -316,7 +361,8 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
               const mine = m.sender_id === myId;
               const previous = messages[index - 1];
               const newDay = !previous || dayKey(previous.created_at) !== dayKey(m.created_at);
-              const seen = isSeen(otherReadAt, m.created_at);
+              const pending = m.id.startsWith(PENDING_PREFIX);
+              const seen = !pending && isSeen(otherReadAt, m.created_at);
               return (
                 <li key={m.id} className="space-y-2">
                   {newDay ? (
@@ -333,6 +379,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
                       className={cn(
                         "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
                         mine ? "bg-primary text-primary-foreground" : "bg-muted",
+                        pending && "opacity-70",
                       )}
                     >
                       {m.body}
@@ -352,7 +399,12 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
                         className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[11px]"
                         data-testid="message-status"
                       >
-                        {seen && otherReadAt ? (
+                        {pending ? (
+                          <>
+                            <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                            กำลังส่ง…
+                          </>
+                        ) : seen && otherReadAt ? (
                           <>
                             <CheckCheck className="text-primary size-3.5" aria-hidden />
                             อ่านแล้ว · {formatRelative(otherReadAt, now)}
@@ -407,10 +459,10 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
         <Button
           type="submit"
           size="icon"
-          disabled={!draft.trim() || send.isPending || !other.is_active}
+          disabled={!draft.trim() || !other.is_active}
           aria-label="ส่งข้อความ"
         >
-          {send.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
+          <Send aria-hidden />
         </Button>
       </form>
     </section>

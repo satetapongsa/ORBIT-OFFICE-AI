@@ -228,3 +228,33 @@ def test_read_receipts_and_typing_indicator(as_user: AsUser, db: Factory) -> Non
 
     outsider = as_user(["EMPLOYEE"])
     assert outsider.post(f"{CHAT}/conversations/{cid}/typing").status_code == 404
+
+
+def test_events_long_poll_reports_changes(as_user: AsUser) -> None:
+    alice, bob = as_user(["EMPLOYEE"]), as_user(["EMPLOYEE"])
+    cid = open_chat(alice, bob)
+
+    def version(client: TestClient, since: int = -1, wait: int = 0) -> int:
+        response = client.get(f"{CHAT}/events", params={"since": since, "wait": wait})
+        assert response.status_code == 200, response.text
+        return int(response.json()["version"])
+
+    a0, b0 = version(alice), version(bob)
+    assert version(alice, a0, 1) == a0  # nothing new: waits and answers unchanged
+
+    bob.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "สวัสดี"})
+    a1, b1 = version(alice, a0), version(bob, b0)
+    assert a1 != a0 and b1 != b0  # recipient and sender's other tabs
+
+    bob.post(f"{CHAT}/conversations/{cid}/typing")
+    a2 = version(alice, a1)
+    assert a2 != a1 and version(bob, b1) == b1  # typing only wakes the other side
+
+    alice.post(f"{CHAT}/conversations/{cid}/read")
+    assert version(bob, b1) != b1  # "อ่านแล้ว" reaches the sender
+    a3 = version(alice, a2)
+    alice.post(f"{CHAT}/conversations/{cid}/read")  # nothing new to read
+    assert version(alice, a3) == a3
+
+    assert as_user([]).get(f"{CHAT}/events").status_code == 403
+    assert alice.get(f"{CHAT}/events", params={"wait": 31}).status_code == 422

@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { chatQueryKeys, getChatUnread } from "@/services/chat";
 
-const UNREAD_POLL_MS = 30_000;
+// Live updates come from the long poll (useChatRealtime); this is only a safety net.
+const UNREAD_POLL_MS = 60_000;
 
 /** Unread direct messages, shown next to "แชท" in the menu. */
 export function ChatUnreadBadge() {

@@ -68,6 +68,12 @@ class MessagePage(BaseModel):
     other_typing: bool = False
 
 
+class ChatEvents(BaseModel):
+    """Long-poll answer: send ``version`` back as ``since``; a new value means "refetch"."""
+
+    version: int
+
+
 class ChatUnread(BaseModel):
     unread_total: int = Field(ge=0)
 

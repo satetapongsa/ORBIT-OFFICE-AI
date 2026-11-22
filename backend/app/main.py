@@ -11,7 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
 from app.api.v1.router import api_router
-from app.core.config import Settings, get_settings
+from app.core.chat_hub import build_chat_hub
+from app.core.config import Environment, Settings, get_settings
 from app.core.db import dispose_engines
 from app.core.errors import register_exception_handlers
 from app.core.event_loop import is_unsupported_windows_loop
@@ -59,6 +60,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as exc:
             logger.warning("storage_bucket_init_failed", error_type=type(exc).__name__)
     yield
+    await app.state.chat_hub.aclose()
     await close_redis()
     await dispose_engines()
     logger.info("application_shutdown")
@@ -83,6 +85,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.document_storage = ObjectStorage(settings)
     app.state.document_processor = CeleryDocumentProcessor()
     app.state.chat_provider = build_chat_provider(settings)
+    app.state.chat_hub = build_chat_hub(
+        settings.redis_url.get_secret_value(),
+        in_memory=settings.environment is Environment.TEST,
+    )
     app.state.embedding_provider = build_embedding_provider(settings)
 
     register_exception_handlers(app)

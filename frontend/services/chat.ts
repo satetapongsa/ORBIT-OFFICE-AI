@@ -114,3 +114,19 @@ export function sendTyping(conversationId: string): Promise<null> {
 export function isSeen(otherLastReadAt: string | null, sentAt: string): boolean {
   return otherLastReadAt !== null && new Date(otherLastReadAt) >= new Date(sentAt);
 }
+
+const chatEventsSchema = z.object({ version: z.number().int() });
+
+/** Seconds the server holds `/chat/events` open when nothing changes. */
+export const CHAT_EVENTS_WAIT_SECONDS = 25;
+
+/**
+ * Long poll: resolves as soon as anything changes in my conversations (a new message, a read
+ * receipt, typing), or after ~25 s. Pass the returned `version` back as `since`.
+ */
+export function waitForChatEvents(since: number, signal?: AbortSignal) {
+  return apiRequest(`/chat/events?since=${since}&wait=${CHAT_EVENTS_WAIT_SECONDS}`, {
+    schema: chatEventsSchema,
+    signal,
+  });
+}

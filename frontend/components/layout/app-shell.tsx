@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { ChatRealtime } from "@/features/chat/components/chat-realtime";
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
@@ -12,6 +13,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         ข้ามไปยังเนื้อหาหลัก
       </a>
+      <ChatRealtime />
       <AppSidebar />
       <div className="flex min-h-screen flex-col lg:pl-64">
         <AppHeader />

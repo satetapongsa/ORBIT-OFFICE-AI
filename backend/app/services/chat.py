@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from app.core.chat_hub import ChatHub
 from app.core.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.permissions import P
 from app.core.principal import CurrentUser
@@ -262,7 +263,11 @@ async def list_messages(
 
 
 async def send_message(
-    session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID, body: str
+    session: AsyncSession,
+    user: CurrentUser,
+    conversation_id: uuid.UUID,
+    body: str,
+    hub: ChatHub,
 ) -> MessageOut:
     conversation = await _get_mine(session, user, conversation_id)
     other = await user_repo.get_by_id(session, conversation.other_user_id(user.id))
@@ -275,11 +280,16 @@ async def send_message(
     conversation.last_message_at = message.created_at
     conversation.mark_read(user.id, message.created_at)  # my own message is read
     conversation.set_typing(user.id, None)  # sending ends "typing"
+    other_id = conversation.other_user_id(user.id)
     await session.commit()
+    # Both sides: the other person, and my other open tabs/devices.
+    await hub.notify([other_id, user.id])
     return MessageOut.model_validate(message)
 
 
-async def mark_read(session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID) -> int:
+async def mark_read(
+    session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID, hub: ChatHub
+) -> int:
     """Marks everything up to the newest message as read; returns the remaining total."""
     conversation = await _get_mine(session, user, conversation_id)
     newest = await session.scalar(
@@ -290,12 +300,19 @@ async def mark_read(session: AsyncSession, user: CurrentUser, conversation_id: u
     current = conversation.last_read_at(user.id)
     if newest is not None and (current is None or newest > current):
         conversation.mark_read(user.id, newest)
+        other_id = conversation.other_user_id(user.id)
         await session.commit()
+        # Only real changes notify: the sender's "อ่านแล้ว" and my badge on other devices.
+        await hub.notify([other_id, user.id])
     return await unread_total(session, user)
 
 
-async def set_typing(session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID) -> None:
+async def set_typing(
+    session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID, hub: ChatHub
+) -> None:
     """Records that the user is typing right now (database time)."""
     conversation = await _get_mine(session, user, conversation_id)
     conversation.set_typing(user.id, func.now())
+    other_id = conversation.other_user_id(user.id)
     await session.commit()
+    await hub.notify([other_id])

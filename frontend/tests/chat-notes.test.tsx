@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ChatRealtime } from "@/features/chat/components/chat-realtime";
 import { ChatUnreadBadge } from "@/features/chat/components/chat-unread-badge";
 import { ChatView } from "@/features/chat/components/chat-view";
 import { NotesView } from "@/features/notes/components/notes-view";
@@ -19,6 +20,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/features/auth/hooks/use-session", () => ({
   useSession: () => ({
     me: { user: { id: "me" } },
+    isAuthenticated: true,
     has: (p: string) => ["chat:use", "notes:use", "ai:chat"].includes(p),
   }),
 }));
@@ -102,7 +104,7 @@ describe("ChatView", () => {
     expect(screen.getByLabelText("ข้อความ")).toHaveValue("");
   });
 
-  it("shows send times, the seen status of my last message and typing", async () => {
+  it("updates live: seen status and typing arrive through the long poll", async () => {
     search = new URLSearchParams("c=c1");
     const sentAt = "2026-11-22T07:05:00Z"; // 14:05 in Bangkok
     let page = {
@@ -120,24 +122,41 @@ describe("ChatView", () => {
       other_last_read_at: null,
       other_typing: false,
     };
+    // Long poll: answers at once when `since` is stale, otherwise when the test calls wake().
+    let version = 1;
+    const gate: { wake: (() => void) | null } = { wake: null };
     const fetchMock = mockApi({
+      "GET /api/v1/chat/events": (url) => {
+        if (Number(url.searchParams.get("since")) !== version) return json({ version });
+        return new Promise<Response>((resolve) => {
+          gate.wake = () => resolve(json({ version }));
+        }) as unknown as Response;
+      },
       "GET /api/v1/chat/conversations": () => json({ items: [conversation], unread_total: 0 }),
       "GET /api/v1/chat/conversations/c1/messages": () => json(page),
       "POST /api/v1/chat/conversations/c1/read": () => json({ unread_total: 0 }),
       "POST /api/v1/chat/conversations/c1/typing": () => new Response(null, { status: 204 }),
     });
-    render(<ChatView />, { wrapper: createWrapper() });
+    render(
+      <>
+        <ChatRealtime />
+        <ChatView />
+      </>,
+      { wrapper: createWrapper() },
+    );
 
     expect((await screen.findAllByText("14:05")).length).toBeGreaterThan(0);
     expect(screen.getByRole("separator")).toBeInTheDocument(); // day separator
     expect(screen.getByTestId("message-status")).toHaveTextContent("ส่งแล้ว");
 
     page = { ...page, other_last_read_at: new Date().toISOString(), other_typing: true };
+    await waitFor(() => expect(gate.wake).not.toBeNull());
+    version += 1;
+    gate.wake?.();
+    // Delivered by the long poll, well before the 30 s safety-net poll.
     await waitFor(
       () => expect(screen.getByTestId("message-status")).toHaveTextContent(/อ่านแล้ว/),
-      {
-        timeout: 5000,
-      },
+      { timeout: 1000 },
     );
     expect(screen.getByRole("status", { name: "สมชาย ใจดี กำลังพิมพ์" })).toBeInTheDocument();
 
