@@ -74,15 +74,9 @@ class DirectMessage(UUIDPrimaryKeyMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     edited_at: Mapped[datetime | None] = mapped_column()
-    # Unsent by the sender: the text is erased and both sides see "ยกเลิกข้อความแล้ว".
-    deleted_at: Mapped[datetime | None] = mapped_column()
 
     __table_args__ = (
-        CheckConstraint(
-            f"(deleted_at IS NULL AND char_length(body) BETWEEN 1 AND {MESSAGE_MAX_CHARS})"
-            " OR (deleted_at IS NOT NULL AND body = '')",
-            name="body_length",
-        ),
+        CheckConstraint(f"char_length(body) BETWEEN 1 AND {MESSAGE_MAX_CHARS}", name="body_length"),
         Index("ix_direct_messages_conversation_created", "conversation_id", "created_at"),
     )
 

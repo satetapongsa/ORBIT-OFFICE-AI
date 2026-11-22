@@ -635,3 +635,10 @@ one letter per line. Text keeps the sender's line breaks and long unbroken strin
 inside the bubble.
 **Why.** Requested by the user after seeing broken bubbles in production.
 
+## ADR-065 — "Unsend" removed again (2026-11-23)
+**Decision.** At the user's request the unsend feature of ADR-064 is removed completely: no
+`DELETE` endpoint, no menu entry, no `deleted_at` column. Migration `0016` deletes messages that
+were already unsent (their text had been erased, so nothing is lost), restores the original
+`char_length(body) BETWEEN 1 AND 4000` check and drops the column. Editing my own messages
+(any time, "แก้ไขแล้ว") stays, again behind a pencil button next to the message.
+

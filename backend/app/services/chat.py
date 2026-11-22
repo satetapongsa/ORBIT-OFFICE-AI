@@ -338,9 +338,7 @@ async def _my_message_for_change(
     if message is None:
         raise NotFoundError("ไม่พบข้อความนี้")
     if message.sender_id != user.id:
-        raise PermissionDeniedError("แก้ไขหรือยกเลิกได้เฉพาะข้อความของคุณเอง")
-    if message.deleted_at is not None:
-        raise ConflictError("ข้อความนี้ถูกยกเลิกไปแล้ว")
+        raise PermissionDeniedError("แก้ไขได้เฉพาะข้อความของคุณเอง")
     return conversation, message
 
 
@@ -358,25 +356,6 @@ async def edit_message(
         return MessageOut.model_validate(message)
     message.body = body
     message.edited_at = func.now()
-    other_id = conversation.other_user_id(user.id)
-    await session.commit()
-    await session.refresh(message)
-    await hub.notify([other_id, user.id])
-    return MessageOut.model_validate(message)
-
-
-async def unsend_message(
-    session: AsyncSession,
-    user: CurrentUser,
-    conversation_id: uuid.UUID,
-    message_id: uuid.UUID,
-    hub: ChatHub,
-) -> MessageOut:
-    """Unsend for everyone: the text is erased from the database, a marker stays in place."""
-    conversation, message = await _my_message_for_change(session, user, conversation_id, message_id)
-    message.body = ""
-    message.edited_at = None
-    message.deleted_at = func.now()
     other_id = conversation.other_user_id(user.id)
     await session.commit()
     await session.refresh(message)

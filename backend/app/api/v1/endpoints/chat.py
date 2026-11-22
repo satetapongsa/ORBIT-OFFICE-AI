@@ -150,19 +150,3 @@ async def edit_message(
     hub: HubDep,
 ) -> MessageOut:
     return await chat_service.edit_message(db, user, conversation_id, message_id, body.body, hub)
-
-
-@router.delete(
-    "/conversations/{conversation_id}/messages/{message_id}",
-    response_model=MessageOut,
-    summary="Unsend one of my messages (for everyone)",
-    dependencies=[Depends(limit_messages)],
-)
-async def unsend_message(
-    conversation_id: uuid.UUID,
-    message_id: uuid.UUID,
-    db: DbDep,
-    user: ChatUser,
-    hub: HubDep,
-) -> MessageOut:
-    return await chat_service.unsend_message(db, user, conversation_id, message_id, hub)
