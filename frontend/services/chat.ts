@@ -18,6 +18,8 @@ export const chatMessageSchema = z.object({
   body: z.string(),
   created_at: z.string(),
   edited_at: z.string().nullable().default(null),
+  /** Unsent by the sender: `body` is empty. */
+  deleted_at: z.string().nullable().default(null),
 });
 
 export const conversationSchema = z.object({
@@ -132,14 +134,9 @@ export function waitForChatEvents(since: number, signal?: AbortSignal) {
   });
 }
 
-/** Like Messenger: the sender may edit a message for 15 minutes (the server enforces it). */
-export const MESSAGE_EDIT_WINDOW_MS = 15 * 60_000;
-
-export function canEditMessage(message: ChatMessage, myId: string | undefined, now: Date): boolean {
-  return (
-    message.sender_id === myId &&
-    now.getTime() - new Date(message.created_at).getTime() < MESSAGE_EDIT_WINDOW_MS
-  );
+/** I can edit or unsend my own messages (any time) unless already unsent. */
+export function canChangeMessage(message: ChatMessage, myId: string | undefined): boolean {
+  return message.sender_id === myId && message.deleted_at === null;
 }
 
 export function editMessage(
@@ -150,5 +147,13 @@ export function editMessage(
   return apiRequest(
     `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
     { method: "PATCH", schema: chatMessageSchema, body: { body } },
+  );
+}
+
+/** Unsend for everyone; the server erases the text and returns the marker. */
+export function unsendMessage(conversationId: string, messageId: string): Promise<ChatMessage> {
+  return apiRequest(
+    `/chat/conversations/${encodeURIComponent(conversationId)}/messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE", schema: chatMessageSchema },
   );
 }

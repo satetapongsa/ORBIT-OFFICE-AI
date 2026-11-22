@@ -260,23 +260,20 @@ def test_events_long_poll_reports_changes(as_user: AsUser) -> None:
     assert alice.get(f"{CHAT}/events", params={"wait": 31}).status_code == 422
 
 
-def test_sender_can_edit_a_message_within_15_minutes(as_user: AsUser, db: Factory) -> None:
+def test_sender_can_edit_any_of_their_messages(as_user: AsUser, db: Factory) -> None:
     alice, bob = as_user(["EMPLOYEE"]), as_user(["EMPLOYEE"])
     cid = open_chat(alice, bob)
     sent = alice.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ประชุม 10 โมง"}).json()
-    assert sent["edited_at"] is None
+    assert sent["edited_at"] is None and sent["deleted_at"] is None
     url = f"{CHAT}/conversations/{cid}/messages/{sent['id']}"
     b0 = int(bob.get(f"{CHAT}/events", params={"wait": 0}).json()["version"])
 
-    edited = alice.patch(url, json={"body": "  ประชุม 11 โมง  "})
+    edited = alice.patch(url, json={"body": "  ประชุม 11 โมง\nห้อง 3  "})
     assert edited.status_code == 200, edited.text
-    assert edited.json()["body"] == "ประชุม 11 โมง"
+    assert edited.json()["body"] == "ประชุม 11 โมง\nห้อง 3"  # line breaks kept
     assert edited.json()["edited_at"] is not None
     seen_by_bob = bob.get(f"{CHAT}/conversations/{cid}/messages").json()["items"][0]
-    assert seen_by_bob["body"] == "ประชุม 11 โมง" and seen_by_bob["edited_at"] is not None
-    assert bob.get(f"{CHAT}/conversations").json()["items"][0]["last_message"]["body"] == (
-        "ประชุม 11 โมง"
-    )
+    assert seen_by_bob["body"] == "ประชุม 11 โมง\nห้อง 3" and seen_by_bob["edited_at"] is not None
     assert int(bob.get(f"{CHAT}/events", params={"since": b0, "wait": 0}).json()["version"]) != b0
 
     assert bob.patch(url, json={"body": "แก้ของคนอื่น"}).status_code == 403
@@ -285,8 +282,34 @@ def test_sender_can_edit_a_message_within_15_minutes(as_user: AsUser, db: Factor
 
     from sqlalchemy import text
 
-    with db.engine.begin() as conn:
-        conn.execute(text("UPDATE direct_messages SET created_at = now() - interval '16 minutes'"))
-    late = alice.patch(url, json={"body": "สายไปแล้ว"})
-    assert late.status_code == 409
-    assert "15 นาที" in late.json()["error"]["message"]
+    with db.engine.begin() as conn:  # no time limit: old messages can be edited too
+        conn.execute(text("UPDATE direct_messages SET created_at = now() - interval '30 days'"))
+    assert alice.patch(url, json={"body": "แก้ทีหลังได้"}).status_code == 200
+
+
+def test_sender_can_unsend_a_message_for_everyone(as_user: AsUser, db: Factory) -> None:
+    alice, bob = as_user(["EMPLOYEE"]), as_user(["EMPLOYEE"])
+    cid = open_chat(alice, bob)
+    keep = alice.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ข้อความแรก"}).json()
+    oops = alice.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ส่งผิดคน"}).json()
+    url = f"{CHAT}/conversations/{cid}/messages/{oops['id']}"
+    b0 = int(bob.get(f"{CHAT}/events", params={"wait": 0}).json()["version"])
+
+    assert bob.delete(url).status_code == 403
+    gone = alice.delete(url)
+    assert gone.status_code == 200, gone.text
+    assert gone.json()["body"] == "" and gone.json()["deleted_at"] is not None
+    assert int(bob.get(f"{CHAT}/events", params={"since": b0, "wait": 0}).json()["version"]) != b0
+
+    items = bob.get(f"{CHAT}/conversations/{cid}/messages").json()["items"]
+    assert [(m["id"], m["body"], m["deleted_at"] is not None) for m in items] == [
+        (keep["id"], "ข้อความแรก", False),
+        (oops["id"], "", True),
+    ]
+    listed = bob.get(f"{CHAT}/conversations").json()["items"][0]["last_message"]
+    assert listed["deleted_at"] is not None and listed["body"] == ""
+    # The text is really erased from the database.
+    assert db.scalar("SELECT body FROM direct_messages WHERE id = :i", i=oops["id"]) == ""
+
+    assert alice.delete(url).status_code == 409
+    assert alice.patch(url, json={"body": "กู้คืน"}).status_code == 409

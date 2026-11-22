@@ -166,7 +166,7 @@ describe("ChatView", () => {
     expect(typingCalls).toHaveLength(1);
   });
 
-  it("lets me edit my recent message and shows 'แก้ไขแล้ว'", async () => {
+  it("lets me edit my message and shows 'แก้ไขแล้ว'", async () => {
     search = new URLSearchParams("c=c1");
     const fresh = new Date().toISOString();
     let items = [
@@ -200,10 +200,11 @@ describe("ChatView", () => {
     });
     render(<ChatView />, { wrapper: createWrapper() });
 
-    // Only my own message can be edited.
-    const editButtons = await screen.findAllByRole("button", { name: "แก้ไขข้อความ" });
-    expect(editButtons).toHaveLength(1);
-    await userEvent.click(editButtons[0]);
+    // Only my own message has the menu.
+    const menus = await screen.findAllByRole("button", { name: "ตัวเลือกข้อความ" });
+    expect(menus).toHaveLength(1);
+    await userEvent.click(menus[0]);
+    await userEvent.click(await screen.findByRole("menuitem", { name: "แก้ไขข้อความ" }));
     const box = screen.getByLabelText("แก้ไขข้อความ");
     expect(box).toHaveValue("10 โมง");
     await userEvent.clear(box);
@@ -213,6 +214,53 @@ describe("ChatView", () => {
     expect(screen.getByText(/แก้ไขแล้ว/)).toBeInTheDocument();
     const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
     expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ body: "11 โมง" });
+  });
+
+  it("unsends my message for everyone and keeps long text as one paragraph", async () => {
+    search = new URLSearchParams("c=c1");
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const long = "บรรทัดแรก\nบรรทัดที่สอง 64565456465645654564656456545646";
+    let items = [
+      { ...message("m1", "bob", long), created_at: NOW },
+      { ...message("m2", "me", "ส่งผิดคน"), created_at: NOW },
+    ];
+    const fetchMock = mockApi({
+      "GET /api/v1/chat/conversations": () =>
+        json({
+          items: [
+            {
+              id: "c1",
+              other: person,
+              last_message: items[1],
+              last_message_at: NOW,
+              unread_count: 0,
+              other_last_read_at: null,
+              other_typing: false,
+            },
+          ],
+          unread_total: 0,
+        }),
+      "GET /api/v1/chat/conversations/c1/messages": () => json({ items, has_more: false }),
+      "POST /api/v1/chat/conversations/c1/read": () => json({ unread_total: 0 }),
+      "DELETE /api/v1/chat/conversations/c1/messages/m2": () => {
+        const gone = { ...items[1], body: "", deleted_at: NOW };
+        items = [items[0], gone];
+        return json(gone);
+      },
+    });
+    render(<ChatView />, { wrapper: createWrapper() });
+
+    // The text keeps the sender's line breaks inside one bubble.
+    const bubble = await screen.findByText(/บรรทัดแรก/);
+    expect(bubble.textContent).toContain("บรรทัดแรก\nบรรทัดที่สอง");
+    expect(bubble.className).toContain("whitespace-pre-wrap");
+
+    await userEvent.click(screen.getByRole("button", { name: "ตัวเลือกข้อความ" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "ยกเลิกข้อความ" }));
+    expect(await screen.findByText("คุณยกเลิกข้อความนี้")).toBeInTheDocument();
+    expect(screen.queryByText("ส่งผิดคน")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ตัวเลือกข้อความ" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true);
   });
 
   it("opens the thread with a colleague from their profile link", async () => {

@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Ban,
   Check,
   CheckCheck,
   Loader2,
   MessagesSquare,
+  MoreHorizontal,
   Pencil,
   Send,
   Users,
@@ -20,6 +22,12 @@ import { EmptyState } from "@/components/common/empty-state";
 import { ErrorState } from "@/components/common/error-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/features/auth/hooks/use-session";
@@ -27,7 +35,7 @@ import { dayKey, formatChatDay, formatDateTime, formatRelative, formatTime } fro
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
 import {
-  canEditMessage,
+  canChangeMessage,
   chatQueryKeys,
   editMessage,
   isSeen,
@@ -37,6 +45,7 @@ import {
   MESSAGE_MAX_CHARS,
   sendMessage,
   sendTyping,
+  unsendMessage,
   startConversation,
   type ChatMessage,
   type Conversation,
@@ -118,8 +127,15 @@ function ConversationItem({
 }) {
   const last = conversation.last_message;
   const mineLast = last !== null && last.sender_id === myId;
-  const preview = last ? `${mineLast ? "คุณ: " : ""}${last.body}` : "ยังไม่มีข้อความ";
-  const seen = mineLast && isSeen(conversation.other_last_read_at, last.created_at);
+  const preview = !last
+    ? "ยังไม่มีข้อความ"
+    : last.deleted_at
+      ? mineLast
+        ? "คุณยกเลิกข้อความ"
+        : "ยกเลิกข้อความแล้ว"
+      : `${mineLast ? "คุณ: " : ""}${last.body}`;
+  const seen =
+    mineLast && !last.deleted_at && isSeen(conversation.other_last_read_at, last.created_at);
   return (
     <button
       type="button"
@@ -150,7 +166,7 @@ function ConversationItem({
                 conversation.unread_count ? "text-foreground font-medium" : "text-muted-foreground",
               )}
             >
-              {mineLast ? (
+              {mineLast && !last.deleted_at ? (
                 seen ? (
                   <CheckCheck className="text-primary size-3.5 shrink-0" aria-label="อ่านแล้ว" />
                 ) : (
@@ -200,7 +216,9 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const newestId = messages.at(-1)?.id;
   const otherReadAt = latest.data?.other_last_read_at ?? null;
   const otherTyping = latest.data?.other_typing ?? false;
-  const lastMineId = [...messages].reverse().find((m) => m.sender_id === myId)?.id;
+  const lastMineId = [...messages]
+    .reverse()
+    .find((m) => m.sender_id === myId && m.deleted_at === null)?.id;
   const canLoadOlder = hasMoreOlder ?? latest.data?.has_more ?? false;
 
   // Mark as read whenever a new message shows up, then refresh the badges.
@@ -285,6 +303,25 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     onError: (error) => toast.error(errorText(error, "แก้ไขข้อความไม่สำเร็จ")),
   });
 
+  const unsend = useMutation({
+    mutationFn: (id: string) => unsendMessage(conversation.id, id),
+    onSuccess: (saved) => {
+      const swap = (m: ChatMessage) => (m.id === saved.id ? saved : m);
+      client.setQueryData<MessagePage>(messagesKey, (page) =>
+        page ? { ...page, items: page.items.map(swap) } : page,
+      );
+      setOlder((current) => current.map(swap));
+      void client.invalidateQueries({ queryKey: chatQueryKeys.conversations });
+    },
+    onError: (error) => toast.error(errorText(error, "ยกเลิกข้อความไม่สำเร็จ")),
+  });
+
+  function confirmUnsend(id: string) {
+    if (window.confirm("ยกเลิกข้อความนี้สำหรับทุกคนใช่ไหม? ข้อความจะถูกลบออกจากแชท")) {
+      unsend.mutate(id);
+    }
+  }
+
   function saveEdit() {
     const body = editing?.text.trim();
     if (!editing || !body || editMutation.isPending) return;
@@ -331,6 +368,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
         body,
         created_at: new Date().toISOString(),
         edited_at: null,
+        deleted_at: null,
       },
     ]);
     send.mutate({ body, tempId });
@@ -456,41 +494,67 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
                     ) : (
                       <div
                         className={cn(
-                          "group flex max-w-full items-center gap-1",
+                          // Full width row, so the bubble's 80% limit is measured against the
+                          // thread (a shrink-to-fit row squeezed short messages to one letter).
+                          "group flex w-full items-center gap-1",
                           mine && "flex-row-reverse",
                         )}
                       >
-                        <div
-                          className={cn(
-                            "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
-                            mine ? "bg-primary text-primary-foreground" : "bg-muted",
-                            pending && "opacity-70",
-                          )}
-                        >
-                          {m.body}
-                          <time
-                            dateTime={m.created_at}
-                            title={formatDateTime(m.created_at)}
+                        {m.deleted_at ? (
+                          <div className="text-muted-foreground flex max-w-[80%] items-center gap-1.5 rounded-2xl border border-dashed px-3.5 py-2 text-sm italic">
+                            <Ban className="size-3.5 shrink-0" aria-hidden />
+                            {mine ? "คุณยกเลิกข้อความนี้" : `${other.display_name} ยกเลิกข้อความ`}
+                          </div>
+                        ) : (
+                          <div
                             className={cn(
-                              "mt-0.5 block text-right text-[10px]",
-                              mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                              "max-w-[80%] min-w-0 rounded-2xl px-3.5 py-2 text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap",
+                              mine ? "bg-primary text-primary-foreground" : "bg-muted",
+                              pending && "opacity-70",
                             )}
                           >
-                            {m.edited_at ? "แก้ไขแล้ว · " : ""}
-                            {formatTime(m.created_at)}
-                          </time>
-                        </div>
-                        {!pending && canEditMessage(m, myId, now) ? (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-muted-foreground size-7 shrink-0 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 sm:opacity-0"
-                            onClick={() => setEditing({ id: m.id, text: m.body })}
-                            aria-label="แก้ไขข้อความ"
-                            title="แก้ไขข้อความ (ภายใน 15 นาทีหลังส่ง)"
-                          >
-                            <Pencil className="size-3.5" aria-hidden />
-                          </Button>
+                            {m.body}
+                            <time
+                              dateTime={m.created_at}
+                              title={formatDateTime(m.created_at)}
+                              className={cn(
+                                "mt-0.5 block text-right text-[10px] whitespace-nowrap",
+                                mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                              )}
+                            >
+                              {m.edited_at ? "แก้ไขแล้ว · " : ""}
+                              {formatTime(m.created_at)}
+                            </time>
+                          </div>
+                        )}
+                        {!pending && canChangeMessage(m, myId) ? (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground size-7 shrink-0 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 sm:opacity-0"
+                                aria-label="ตัวเลือกข้อความ"
+                              >
+                                <MoreHorizontal className="size-4" aria-hidden />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align={mine ? "end" : "start"}>
+                              <DropdownMenuItem
+                                onSelect={() => setEditing({ id: m.id, text: m.body })}
+                              >
+                                <Pencil aria-hidden />
+                                แก้ไขข้อความ
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                variant="destructive"
+                                onSelect={() => confirmUnsend(m.id)}
+                              >
+                                <Ban aria-hidden />
+                                ยกเลิกข้อความ
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         ) : null}
                       </div>
                     )}

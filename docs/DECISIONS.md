@@ -622,3 +622,16 @@ woken through the real-time channel (ADR-062), so the new text appears at once. 
 pencil next to my own recent messages opens an inline editor (Enter saves, Esc cancels).
 **Why.** Requested by the user. The window keeps conversations trustworthy as a work record.
 
+## ADR-064 — Unsend chat messages; edit without a time limit; bubble layout fix (2026-11-23)
+**Decision.** The sender can edit any of their own messages at any time (the 15-minute
+window of ADR-063 is removed at the user's request) and can unsend one for everyone:
+`DELETE /chat/conversations/{id}/messages/{message_id}` erases the text in the database
+(`body = ''`, `deleted_at` set; migration `0015` adjusts the check constraint) and both sides
+see "ยกเลิกข้อความแล้ว" in its place. Unsent messages cannot be edited or unsent again (409);
+the other participant gets 403. Both actions are under a ⋯ menu on my own messages (always
+visible on touch screens). Bubbles now sit in a full-width row so their 80 % width limit is
+measured against the thread: before, a shrink-to-fit row made short received messages wrap
+one letter per line. Text keeps the sender's line breaks and long unbroken strings wrap
+inside the bubble.
+**Why.** Requested by the user after seeing broken bubbles in production.
+
