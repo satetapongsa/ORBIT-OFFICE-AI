@@ -11,17 +11,22 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import and_, func, or_, select, text, tuple_
+from sqlalchemy import and_, func, literal, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.core.chat_hub import ChatHub
-from app.core.errors import ConflictError, NotFoundError, ValidationFailedError
+from app.core.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationFailedError,
+)
 from app.core.permissions import P
 from app.core.principal import CurrentUser
 from app.models.identity import User
-from app.models.messaging import Conversation, DirectMessage
+from app.models.messaging import MESSAGE_EDIT_WINDOW_MINUTES, Conversation, DirectMessage
 from app.repositories import users as user_repo
 from app.schemas.common import ErrorDetail
 from app.schemas.messaging import (
@@ -316,3 +321,42 @@ async def set_typing(
     other_id = conversation.other_user_id(user.id)
     await session.commit()
     await hub.notify([other_id])
+
+
+async def edit_message(
+    session: AsyncSession,
+    user: CurrentUser,
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: str,
+    hub: ChatHub,
+) -> MessageOut:
+    """The sender may change a message within the edit window; both sides see "แก้ไขแล้ว"."""
+    conversation = await _get_mine(session, user, conversation_id)
+    message = await session.scalar(
+        select(DirectMessage)
+        .where(DirectMessage.id == message_id, DirectMessage.conversation_id == conversation.id)
+        .with_for_update()
+    )
+    if message is None:
+        raise NotFoundError("ไม่พบข้อความนี้")
+    if message.sender_id != user.id:
+        raise PermissionDeniedError("แก้ไขได้เฉพาะข้อความของคุณเอง")
+    still_editable = await session.scalar(
+        # Database clock, like created_at itself.
+        select(
+            literal(message.created_at)
+            > func.now() - text(f"interval '{MESSAGE_EDIT_WINDOW_MINUTES} minutes'")
+        )
+    )
+    if not still_editable:
+        raise ConflictError(f"แก้ไขข้อความได้ภายใน {MESSAGE_EDIT_WINDOW_MINUTES} นาทีหลังส่งเท่านั้น")
+    if body == message.body:
+        return MessageOut.model_validate(message)
+    message.body = body
+    message.edited_at = func.now()
+    other_id = conversation.other_user_id(user.id)
+    await session.commit()
+    await session.refresh(message)
+    await hub.notify([other_id, user.id])
+    return MessageOut.model_validate(message)

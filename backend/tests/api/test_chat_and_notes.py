@@ -258,3 +258,35 @@ def test_events_long_poll_reports_changes(as_user: AsUser) -> None:
 
     assert as_user([]).get(f"{CHAT}/events").status_code == 403
     assert alice.get(f"{CHAT}/events", params={"wait": 31}).status_code == 422
+
+
+def test_sender_can_edit_a_message_within_15_minutes(as_user: AsUser, db: Factory) -> None:
+    alice, bob = as_user(["EMPLOYEE"]), as_user(["EMPLOYEE"])
+    cid = open_chat(alice, bob)
+    sent = alice.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ประชุม 10 โมง"}).json()
+    assert sent["edited_at"] is None
+    url = f"{CHAT}/conversations/{cid}/messages/{sent['id']}"
+    b0 = int(bob.get(f"{CHAT}/events", params={"wait": 0}).json()["version"])
+
+    edited = alice.patch(url, json={"body": "  ประชุม 11 โมง  "})
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["body"] == "ประชุม 11 โมง"
+    assert edited.json()["edited_at"] is not None
+    seen_by_bob = bob.get(f"{CHAT}/conversations/{cid}/messages").json()["items"][0]
+    assert seen_by_bob["body"] == "ประชุม 11 โมง" and seen_by_bob["edited_at"] is not None
+    assert bob.get(f"{CHAT}/conversations").json()["items"][0]["last_message"]["body"] == (
+        "ประชุม 11 โมง"
+    )
+    assert int(bob.get(f"{CHAT}/events", params={"since": b0, "wait": 0}).json()["version"]) != b0
+
+    assert bob.patch(url, json={"body": "แก้ของคนอื่น"}).status_code == 403
+    assert as_user(["EMPLOYEE"]).patch(url, json={"body": "x"}).status_code == 404
+    assert alice.patch(url, json={"body": "   "}).status_code == 422
+
+    from sqlalchemy import text
+
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE direct_messages SET created_at = now() - interval '16 minutes'"))
+    late = alice.patch(url, json={"body": "สายไปแล้ว"})
+    assert late.status_code == 409
+    assert "15 นาที" in late.json()["error"]["message"]

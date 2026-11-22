@@ -1,7 +1,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, CheckCheck, Loader2, MessagesSquare, Send, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  CheckCheck,
+  Loader2,
+  MessagesSquare,
+  Pencil,
+  Send,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -18,7 +27,9 @@ import { dayKey, formatChatDay, formatDateTime, formatRelative, formatTime } fro
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
 import {
+  canEditMessage,
   chatQueryKeys,
+  editMessage,
   isSeen,
   listConversations,
   listMessages,
@@ -258,6 +269,38 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     },
   });
 
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const editMutation = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: string }) =>
+      editMessage(conversation.id, id, body),
+    onSuccess: (saved) => {
+      const swap = (m: ChatMessage) => (m.id === saved.id ? saved : m);
+      client.setQueryData<MessagePage>(messagesKey, (page) =>
+        page ? { ...page, items: page.items.map(swap) } : page,
+      );
+      setOlder((current) => current.map(swap));
+      setEditing(null);
+      void client.invalidateQueries({ queryKey: chatQueryKeys.conversations });
+    },
+    onError: (error) => toast.error(errorText(error, "แก้ไขข้อความไม่สำเร็จ")),
+  });
+
+  function saveEdit() {
+    const body = editing?.text.trim();
+    if (!editing || !body || editMutation.isPending) return;
+    editMutation.mutate({ id: editing.id, body });
+  }
+
+  function onEditKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setEditing(null);
+    } else if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      saveEdit();
+    }
+  }
+
   async function loadOlder() {
     const first = messages[0];
     if (!first) return;
@@ -287,6 +330,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
         sender_id: myId ?? "",
         body,
         created_at: new Date().toISOString(),
+        edited_at: null,
       },
     ]);
     send.mutate({ body, tempId });
@@ -375,25 +419,81 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
                     </div>
                   ) : null}
                   <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
-                        mine ? "bg-primary text-primary-foreground" : "bg-muted",
-                        pending && "opacity-70",
-                      )}
-                    >
-                      {m.body}
-                      <time
-                        dateTime={m.created_at}
-                        title={formatDateTime(m.created_at)}
+                    {editing?.id === m.id ? (
+                      <div
+                        className="w-full max-w-[80%] space-y-2"
+                        // Keep the whole editor (with its buttons) on screen.
+                        ref={(node) => node?.scrollIntoView({ block: "nearest" })}
+                      >
+                        <Textarea
+                          autoFocus
+                          value={editing.text}
+                          onChange={(event) => setEditing({ id: m.id, text: event.target.value })}
+                          onKeyDown={onEditKeyDown}
+                          maxLength={MESSAGE_MAX_CHARS}
+                          aria-label="แก้ไขข้อความ"
+                          className="min-h-16 resize-none"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <span className="text-muted-foreground mr-auto text-[11px]">
+                            Enter เพื่อบันทึก · Esc เพื่อยกเลิก
+                          </span>
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                            ยกเลิก
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={saveEdit}
+                            disabled={!editing.text.trim() || editMutation.isPending}
+                          >
+                            {editMutation.isPending ? (
+                              <Loader2 className="animate-spin" aria-hidden />
+                            ) : null}
+                            บันทึก
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
                         className={cn(
-                          "mt-0.5 block text-right text-[10px]",
-                          mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                          "group flex max-w-full items-center gap-1",
+                          mine && "flex-row-reverse",
                         )}
                       >
-                        {formatTime(m.created_at)}
-                      </time>
-                    </div>
+                        <div
+                          className={cn(
+                            "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
+                            mine ? "bg-primary text-primary-foreground" : "bg-muted",
+                            pending && "opacity-70",
+                          )}
+                        >
+                          {m.body}
+                          <time
+                            dateTime={m.created_at}
+                            title={formatDateTime(m.created_at)}
+                            className={cn(
+                              "mt-0.5 block text-right text-[10px]",
+                              mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                            )}
+                          >
+                            {m.edited_at ? "แก้ไขแล้ว · " : ""}
+                            {formatTime(m.created_at)}
+                          </time>
+                        </div>
+                        {!pending && canEditMessage(m, myId, now) ? (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground size-7 shrink-0 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 sm:opacity-0"
+                            onClick={() => setEditing({ id: m.id, text: m.body })}
+                            aria-label="แก้ไขข้อความ"
+                            title="แก้ไขข้อความ (ภายใน 15 นาทีหลังส่ง)"
+                          >
+                            <Pencil className="size-3.5" aria-hidden />
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
                     {m.id === lastMineId ? (
                       <span
                         className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[11px]"

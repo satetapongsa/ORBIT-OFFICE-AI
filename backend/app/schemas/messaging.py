@@ -33,6 +33,7 @@ class MessageOut(BaseModel):
     sender_id: uuid.UUID
     body: str
     created_at: datetime
+    edited_at: datetime | None = None
 
 
 class ConversationOut(BaseModel):

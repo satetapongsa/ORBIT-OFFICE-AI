@@ -133,3 +133,20 @@ async def events(
     # and a held connection per open browser tab would exhaust the small pool.
     await db.close()
     return ChatEvents(version=await hub.wait(user.id, since, float(wait)))
+
+
+@router.patch(
+    "/conversations/{conversation_id}/messages/{message_id}",
+    response_model=MessageOut,
+    summary="Edit my message (within 15 minutes of sending)",
+    dependencies=[Depends(limit_messages)],
+)
+async def edit_message(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: SendMessage,
+    db: DbDep,
+    user: ChatUser,
+    hub: HubDep,
+) -> MessageOut:
+    return await chat_service.edit_message(db, user, conversation_id, message_id, body.body, hub)

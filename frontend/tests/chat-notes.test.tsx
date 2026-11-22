@@ -166,6 +166,55 @@ describe("ChatView", () => {
     expect(typingCalls).toHaveLength(1);
   });
 
+  it("lets me edit my recent message and shows 'แก้ไขแล้ว'", async () => {
+    search = new URLSearchParams("c=c1");
+    const fresh = new Date().toISOString();
+    let items = [
+      { ...message("m1", "bob", "ประชุมกี่โมง"), created_at: fresh },
+      { ...message("m2", "me", "10 โมง"), created_at: fresh },
+    ];
+    const fetchMock = mockApi({
+      "GET /api/v1/chat/conversations": () =>
+        json({
+          items: [
+            {
+              id: "c1",
+              other: person,
+              last_message: items[1],
+              last_message_at: fresh,
+              unread_count: 0,
+              other_last_read_at: null,
+              other_typing: false,
+            },
+          ],
+          unread_total: 0,
+        }),
+      "GET /api/v1/chat/conversations/c1/messages": () => json({ items, has_more: false }),
+      "POST /api/v1/chat/conversations/c1/read": () => json({ unread_total: 0 }),
+      "PATCH /api/v1/chat/conversations/c1/messages/m2": (_url, init) => {
+        const { body } = JSON.parse(String(init?.body)) as { body: string };
+        const saved = { ...items[1], body, edited_at: new Date().toISOString() };
+        items = [items[0], saved];
+        return json(saved);
+      },
+    });
+    render(<ChatView />, { wrapper: createWrapper() });
+
+    // Only my own message can be edited.
+    const editButtons = await screen.findAllByRole("button", { name: "แก้ไขข้อความ" });
+    expect(editButtons).toHaveLength(1);
+    await userEvent.click(editButtons[0]);
+    const box = screen.getByLabelText("แก้ไขข้อความ");
+    expect(box).toHaveValue("10 โมง");
+    await userEvent.clear(box);
+    await userEvent.type(box, "11 โมง{Enter}");
+
+    expect(await screen.findByText("11 โมง")).toBeInTheDocument();
+    expect(screen.getByText(/แก้ไขแล้ว/)).toBeInTheDocument();
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toEqual({ body: "11 โมง" });
+  });
+
   it("opens the thread with a colleague from their profile link", async () => {
     search = new URLSearchParams("with=bob");
     mockApi({

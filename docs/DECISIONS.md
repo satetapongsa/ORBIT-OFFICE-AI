@@ -613,3 +613,12 @@ Enter, own message 0.02–0.07 s, typing indicator 0.09 s; server wake-up ≈1 m
 through Vercel's `/api` rewrite to the API host and need sticky connections; long polling is
 plain HTTP, works through Vercel, Nginx and Render, and uses fewer requests than fast polling.
 
+## ADR-063 — Editing sent chat messages (2026-11-23)
+**Decision.** `PATCH /chat/conversations/{id}/messages/{message_id}` lets the **sender** change
+the text of their own message for **15 minutes** after sending (database time, like
+Messenger); `edited_at` is stored (migration `0014`) and both sides see "แก้ไขแล้ว" next to
+the time. The other participant gets 403, anyone else 404, and a late edit 409. Both sides are
+woken through the real-time channel (ADR-062), so the new text appears at once. In the UI a
+pencil next to my own recent messages opens an inline editor (Enter saves, Esc cancels).
+**Why.** Requested by the user. The window keeps conversations trustworthy as a work record.
+
