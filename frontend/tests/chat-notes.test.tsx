@@ -68,6 +68,8 @@ describe("ChatView", () => {
               last_message: messages.at(-1),
               last_message_at: NOW,
               unread_count: 1,
+              other_last_read_at: null,
+              other_typing: false,
             },
           ],
           unread_total: 1,
@@ -100,6 +102,51 @@ describe("ChatView", () => {
     expect(screen.getByLabelText("ข้อความ")).toHaveValue("");
   });
 
+  it("shows send times, the seen status of my last message and typing", async () => {
+    search = new URLSearchParams("c=c1");
+    const sentAt = "2026-11-22T07:05:00Z"; // 14:05 in Bangkok
+    let page = {
+      items: [{ ...message("m1", "me", "ส่งรายงานแล้วนะ"), created_at: sentAt }],
+      has_more: false,
+      other_last_read_at: null as string | null,
+      other_typing: false,
+    };
+    const conversation = {
+      id: "c1",
+      other: person,
+      last_message: page.items[0],
+      last_message_at: sentAt,
+      unread_count: 0,
+      other_last_read_at: null,
+      other_typing: false,
+    };
+    const fetchMock = mockApi({
+      "GET /api/v1/chat/conversations": () => json({ items: [conversation], unread_total: 0 }),
+      "GET /api/v1/chat/conversations/c1/messages": () => json(page),
+      "POST /api/v1/chat/conversations/c1/read": () => json({ unread_total: 0 }),
+      "POST /api/v1/chat/conversations/c1/typing": () => new Response(null, { status: 204 }),
+    });
+    render(<ChatView />, { wrapper: createWrapper() });
+
+    expect((await screen.findAllByText("14:05")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("separator")).toBeInTheDocument(); // day separator
+    expect(screen.getByTestId("message-status")).toHaveTextContent("ส่งแล้ว");
+
+    page = { ...page, other_last_read_at: new Date().toISOString(), other_typing: true };
+    await waitFor(
+      () => expect(screen.getByTestId("message-status")).toHaveTextContent(/อ่านแล้ว/),
+      {
+        timeout: 5000,
+      },
+    );
+    expect(screen.getByRole("status", { name: "สมชาย ใจดี กำลังพิมพ์" })).toBeInTheDocument();
+
+    // Typing sends at most one signal per few seconds.
+    await userEvent.type(screen.getByLabelText("ข้อความ"), "กำลังตอบ");
+    const typingCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/typing"));
+    expect(typingCalls).toHaveLength(1);
+  });
+
   it("opens the thread with a colleague from their profile link", async () => {
     search = new URLSearchParams("with=bob");
     mockApi({
@@ -111,6 +158,8 @@ describe("ChatView", () => {
           last_message: null,
           last_message_at: null,
           unread_count: 0,
+          other_last_read_at: null,
+          other_typing: false,
         }),
     });
     render(<ChatView />, { wrapper: createWrapper() });

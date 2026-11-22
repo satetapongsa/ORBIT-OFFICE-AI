@@ -43,3 +43,40 @@ export function formatRelative(value: string, now: Date = new Date()): string {
 }
 
 export const numberFormat = new Intl.NumberFormat("th-TH");
+
+/** Clock time only, e.g. "14:05" (business time zone). */
+export function formatTime(value: string, timeZone: string = DEFAULT_TIME_ZONE): string {
+  return new Intl.DateTimeFormat("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone,
+  }).format(new Date(value));
+}
+
+/** Calendar day key `YYYY-MM-DD` in the business time zone (for grouping by day). */
+export function dayKey(value: string | Date, timeZone: string = DEFAULT_TIME_ZONE): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone,
+  }).format(new Date(value));
+}
+
+/** Chat day separator: "วันนี้", "เมื่อวาน", or a date such as "จ. 20 พ.ย. 2569". */
+export function formatChatDay(
+  value: string,
+  now: Date = new Date(),
+  timeZone: string = DEFAULT_TIME_ZONE,
+): string {
+  const key = dayKey(value, timeZone);
+  if (key === dayKey(now, timeZone)) return "วันนี้";
+  if (key === dayKey(new Date(now.getTime() - 86_400_000), timeZone)) return "เมื่อวาน";
+  return new Intl.DateTimeFormat("th-TH", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone,
+  }).format(new Date(value));
+}

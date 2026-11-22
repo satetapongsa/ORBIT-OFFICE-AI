@@ -29,6 +29,9 @@ class Conversation(UUIDPrimaryKeyMixin, Base):
     last_message_at: Mapped[datetime | None] = mapped_column()
     low_last_read_at: Mapped[datetime | None] = mapped_column()
     high_last_read_at: Mapped[datetime | None] = mapped_column()
+    # Last "typing" signal of each participant (database time); shown for a few seconds.
+    low_typing_at: Mapped[datetime | None] = mapped_column()
+    high_typing_at: Mapped[datetime | None] = mapped_column()
 
     __table_args__ = (
         CheckConstraint("user_low_id < user_high_id", name="ordered_pair"),
@@ -41,6 +44,16 @@ class Conversation(UUIDPrimaryKeyMixin, Base):
 
     def last_read_at(self, user_id: uuid.UUID) -> datetime | None:
         return self.low_last_read_at if user_id == self.user_low_id else self.high_last_read_at
+
+    def typing_at(self, user_id: uuid.UUID) -> datetime | None:
+        return self.low_typing_at if user_id == self.user_low_id else self.high_typing_at
+
+    def set_typing(self, user_id: uuid.UUID, when: object) -> None:
+        """``when`` is a datetime, ``func.now()`` or ``None`` (stopped typing)."""
+        if user_id == self.user_low_id:
+            self.low_typing_at = when  # type: ignore[assignment]
+        else:
+            self.high_typing_at = when  # type: ignore[assignment]
 
     def mark_read(self, user_id: uuid.UUID, when: datetime) -> None:
         if user_id == self.user_low_id:

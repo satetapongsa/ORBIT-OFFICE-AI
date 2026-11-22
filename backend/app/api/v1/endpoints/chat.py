@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.deps import DbDep, per_user_rate_limit, require_permissions
 from app.core.permissions import P
@@ -25,6 +25,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 ChatUser = Annotated[CurrentUser, Depends(require_permissions(P.CHAT_USE))]
 limit_messages = per_user_rate_limit("chat-send", lambda _s: 60, lambda _s: 60)
+# The client sends at most one typing signal every 3 seconds per open thread.
+limit_typing = per_user_rate_limit("chat-typing", lambda _s: 60, lambda _s: 60)
 
 
 @router.get("/conversations", response_model=ConversationList, summary="My conversations")
@@ -90,3 +92,14 @@ async def send_message(
 )
 async def mark_read(conversation_id: uuid.UUID, db: DbDep, user: ChatUser) -> ChatUnread:
     return ChatUnread(unread_total=await chat_service.mark_read(db, user, conversation_id))
+
+
+@router.post(
+    "/conversations/{conversation_id}/typing",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Signal that I am typing (shown to the other person for a few seconds)",
+    dependencies=[Depends(limit_typing)],
+)
+async def typing(conversation_id: uuid.UUID, db: DbDep, user: ChatUser) -> Response:
+    await chat_service.set_typing(db, user, conversation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

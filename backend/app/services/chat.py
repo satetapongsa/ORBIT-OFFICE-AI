@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import and_, func, or_, select, tuple_
+from sqlalchemy import and_, func, or_, select, text, tuple_
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
@@ -31,6 +32,8 @@ from app.schemas.messaging import (
 )
 
 NOT_FOUND = "ไม่พบบทสนทนานี้"
+# A typing signal counts for this long; the client repeats it every few seconds while typing.
+TYPING_FRESH_SECONDS = 6
 
 
 def _pair(a: uuid.UUID, b: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
@@ -85,6 +88,21 @@ async def _get_mine(
     return conversation
 
 
+async def _typing_cutoff(session: AsyncSession) -> datetime:
+    """Database time minus the freshness window, so client and server clocks never matter."""
+    cutoff = await session.scalar(
+        select(func.now() - text(f"interval '{TYPING_FRESH_SECONDS} seconds'"))
+    )
+    if not isinstance(cutoff, datetime):  # pragma: no cover - now() always returns a time
+        raise TypeError("database did not return a timestamp")
+    return cutoff
+
+
+def _other_typing(conversation: Conversation, user_id: uuid.UUID, cutoff: datetime) -> bool:
+    at = conversation.typing_at(conversation.other_user_id(user_id))
+    return at is not None and at > cutoff
+
+
 async def _summaries(
     session: AsyncSession, user: CurrentUser, conversations: Sequence[Conversation]
 ) -> list[ConversationOut]:
@@ -122,6 +140,7 @@ async def _summaries(
             )
         ).unique()
     }
+    cutoff = await _typing_cutoff(session)
     out = []
     for c in conversations:
         other = others.get(c.other_user_id(user.id))
@@ -135,6 +154,8 @@ async def _summaries(
                 last_message=MessageOut.model_validate(message) if message else None,
                 last_message_at=c.last_message_at,
                 unread_count=int(unread.get(c.id, 0)),
+                other_last_read_at=c.last_read_at(c.other_user_id(user.id)),
+                other_typing=_other_typing(c, user.id, cutoff),
             )
         )
     return out
@@ -211,7 +232,7 @@ async def list_messages(
     before: uuid.UUID | None,
     limit: int,
 ) -> MessagePage:
-    await _get_mine(session, user, conversation_id)
+    conversation = await _get_mine(session, user, conversation_id)
     stmt = select(DirectMessage).where(DirectMessage.conversation_id == conversation_id)
     if before is not None:
         anchor = await session.scalar(
@@ -232,7 +253,12 @@ async def list_messages(
     ).all()
     has_more = len(rows) > limit
     page = list(reversed(rows[:limit]))
-    return MessagePage(items=[MessageOut.model_validate(m) for m in page], has_more=has_more)
+    return MessagePage(
+        items=[MessageOut.model_validate(m) for m in page],
+        has_more=has_more,
+        other_last_read_at=conversation.last_read_at(conversation.other_user_id(user.id)),
+        other_typing=_other_typing(conversation, user.id, await _typing_cutoff(session)),
+    )
 
 
 async def send_message(
@@ -248,6 +274,7 @@ async def send_message(
     await session.refresh(message)
     conversation.last_message_at = message.created_at
     conversation.mark_read(user.id, message.created_at)  # my own message is read
+    conversation.set_typing(user.id, None)  # sending ends "typing"
     await session.commit()
     return MessageOut.model_validate(message)
 
@@ -265,3 +292,10 @@ async def mark_read(session: AsyncSession, user: CurrentUser, conversation_id: u
         conversation.mark_read(user.id, newest)
         await session.commit()
     return await unread_total(session, user)
+
+
+async def set_typing(session: AsyncSession, user: CurrentUser, conversation_id: uuid.UUID) -> None:
+    """Records that the user is typing right now (database time)."""
+    conversation = await _get_mine(session, user, conversation_id)
+    conversation.set_typing(user.id, func.now())
+    await session.commit()

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Loader2, MessagesSquare, Send, Users } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, MessagesSquare, Send, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -14,23 +14,27 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/features/auth/hooks/use-session";
-import { formatDateTime, formatRelative } from "@/lib/format";
+import { dayKey, formatChatDay, formatDateTime, formatRelative, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
 import {
   chatQueryKeys,
+  isSeen,
   listConversations,
   listMessages,
   markConversationRead,
   MESSAGE_MAX_CHARS,
   sendMessage,
+  sendTyping,
   startConversation,
   type ChatMessage,
   type Conversation,
 } from "@/services/chat";
 
 /** New messages appear by polling: simple, and works on hosts without WebSockets. */
-const THREAD_POLL_MS = 4_000;
+const THREAD_POLL_MS = 3_000;
+/** At most one "typing" signal per this interval (the server shows it for 6 s). */
+const TYPING_PING_MS = 3_000;
 const LIST_POLL_MS = 10_000;
 const PAGE_SIZE = 50;
 
@@ -41,6 +45,31 @@ function initials(name: string): string {
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
+}
+
+/** Re-renders every `ms` so "x นาทีที่แล้ว" labels stay current between polls. */
+function useNow(ms: number): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), ms);
+    return () => clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+function TypingDots({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1" role="status" aria-label={label}>
+      {[0, 150, 300].map((delay) => (
+        <span
+          key={delay}
+          aria-hidden
+          className="bg-muted-foreground/70 size-1.5 animate-bounce rounded-full"
+          style={{ animationDelay: `${delay}ms` }}
+        />
+      ))}
+    </span>
+  );
 }
 
 function Avatar({ name, className }: { name: string; className?: string }) {
@@ -69,9 +98,9 @@ function ConversationItem({
   onSelect: () => void;
 }) {
   const last = conversation.last_message;
-  const preview = last
-    ? `${last.sender_id === myId ? "คุณ: " : ""}${last.body}`
-    : "ยังไม่มีข้อความ";
+  const mineLast = last !== null && last.sender_id === myId;
+  const preview = last ? `${mineLast ? "คุณ: " : ""}${last.body}` : "ยังไม่มีข้อความ";
+  const seen = mineLast && isSeen(conversation.other_last_read_at, last.created_at);
   return (
     <button
       type="button"
@@ -93,14 +122,25 @@ function ConversationItem({
           ) : null}
         </span>
         <span className="flex items-center justify-between gap-2">
-          <span
-            className={cn(
-              "truncate text-xs",
-              conversation.unread_count ? "text-foreground font-medium" : "text-muted-foreground",
-            )}
-          >
-            {preview}
-          </span>
+          {conversation.other_typing ? (
+            <span className="text-primary truncate text-xs italic">กำลังพิมพ์…</span>
+          ) : (
+            <span
+              className={cn(
+                "flex min-w-0 items-center gap-1 text-xs",
+                conversation.unread_count ? "text-foreground font-medium" : "text-muted-foreground",
+              )}
+            >
+              {mineLast ? (
+                seen ? (
+                  <CheckCheck className="text-primary size-3.5 shrink-0" aria-label="อ่านแล้ว" />
+                ) : (
+                  <Check className="size-3.5 shrink-0" aria-label="ส่งแล้ว" />
+                )
+              ) : null}
+              <span className="truncate">{preview}</span>
+            </span>
+          )}
           {conversation.unread_count ? (
             <Badge className="h-5 min-w-5 shrink-0 justify-center px-1.5 text-[11px]">
               {conversation.unread_count > 99 ? "99+" : conversation.unread_count}
@@ -121,6 +161,8 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastPingRef = useRef(0);
+  const now = useNow(30_000);
 
   const latest = useQuery({
     queryKey: chatQueryKeys.messages(conversation.id),
@@ -135,6 +177,9 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
     );
   }, [older, latest.data]);
   const newestId = messages.at(-1)?.id;
+  const otherReadAt = latest.data?.other_last_read_at ?? null;
+  const otherTyping = latest.data?.other_typing ?? false;
+  const lastMineId = [...messages].reverse().find((m) => m.sender_id === myId)?.id;
   const canLoadOlder = hasMoreOlder ?? latest.data?.has_more ?? false;
 
   // Mark as read whenever a new message shows up, then refresh the badges.
@@ -152,12 +197,27 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [newestId]);
+  }, [newestId, otherTyping]);
+
+  // Keep the conversation list's ✓/✓✓ and "กำลังพิมพ์…" in step with the open thread.
+  useEffect(() => {
+    void client.invalidateQueries({ queryKey: chatQueryKeys.conversations });
+  }, [otherReadAt, otherTyping, client]);
+
+  function onDraftChange(value: string) {
+    setDraft(value);
+    const at = Date.now();
+    if (value.trim() && at - lastPingRef.current > TYPING_PING_MS) {
+      lastPingRef.current = at;
+      void sendTyping(conversation.id).catch(() => undefined);
+    }
+  }
 
   const send = useMutation({
     mutationFn: (body: string) => sendMessage(conversation.id, body),
     onSuccess: async () => {
       setDraft("");
+      lastPingRef.current = 0;
       await Promise.all([
         client.invalidateQueries({ queryKey: chatQueryKeys.messages(conversation.id) }),
         client.invalidateQueries({ queryKey: chatQueryKeys.conversations }),
@@ -252,33 +312,73 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
                 </Button>
               </li>
             ) : null}
-            {messages.map((m) => {
+            {messages.map((m, index) => {
               const mine = m.sender_id === myId;
+              const previous = messages[index - 1];
+              const newDay = !previous || dayKey(previous.created_at) !== dayKey(m.created_at);
+              const seen = isSeen(otherReadAt, m.created_at);
               return (
-                <li key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                  <div
-                    className={cn(
-                      "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
-                      mine ? "bg-primary text-primary-foreground" : "bg-muted",
-                    )}
-                  >
-                    {m.body}
-                    <time
-                      dateTime={m.created_at}
-                      title={formatDateTime(m.created_at)}
+                <li key={m.id} className="space-y-2">
+                  {newDay ? (
+                    <div role="separator" className="flex items-center gap-3 py-1">
+                      <span className="bg-border h-px flex-1" />
+                      <span className="text-muted-foreground text-xs">
+                        {formatChatDay(m.created_at, now)}
+                      </span>
+                      <span className="bg-border h-px flex-1" />
+                    </div>
+                  ) : null}
+                  <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+                    <div
                       className={cn(
-                        "mt-0.5 block text-right text-[10px]",
-                        mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                        "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm break-words whitespace-pre-wrap",
+                        mine ? "bg-primary text-primary-foreground" : "bg-muted",
                       )}
                     >
-                      {formatRelative(m.created_at)}
-                    </time>
+                      {m.body}
+                      <time
+                        dateTime={m.created_at}
+                        title={formatDateTime(m.created_at)}
+                        className={cn(
+                          "mt-0.5 block text-right text-[10px]",
+                          mine ? "text-primary-foreground/70" : "text-muted-foreground",
+                        )}
+                      >
+                        {formatTime(m.created_at)}
+                      </time>
+                    </div>
+                    {m.id === lastMineId ? (
+                      <span
+                        className="text-muted-foreground mt-0.5 flex items-center gap-1 text-[11px]"
+                        data-testid="message-status"
+                      >
+                        {seen && otherReadAt ? (
+                          <>
+                            <CheckCheck className="text-primary size-3.5" aria-hidden />
+                            อ่านแล้ว · {formatRelative(otherReadAt, now)}
+                          </>
+                        ) : (
+                          <>
+                            <Check className="size-3.5" aria-hidden />
+                            ส่งแล้ว
+                          </>
+                        )}
+                      </span>
+                    ) : null}
                   </div>
                 </li>
               );
             })}
           </ol>
         )}
+        {otherTyping ? (
+          <div className="mt-2 flex items-end gap-2">
+            <div className="bg-muted rounded-2xl px-3.5 py-3">
+              <TypingDots label={`${other.display_name} กำลังพิมพ์`} />
+            </div>
+            <span className="text-muted-foreground text-xs">กำลังพิมพ์…</span>
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
@@ -291,7 +391,7 @@ function Thread({ conversation, onBack }: { conversation: Conversation; onBack: 
       >
         <Textarea
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={onKeyDown}
           maxLength={MESSAGE_MAX_CHARS}
           rows={1}

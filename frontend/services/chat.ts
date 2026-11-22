@@ -25,6 +25,9 @@ export const conversationSchema = z.object({
   last_message: chatMessageSchema.nullable(),
   last_message_at: z.string().nullable(),
   unread_count: z.number().int().nonnegative(),
+  /** My messages up to this time have been seen by the other person. */
+  other_last_read_at: z.string().nullable(),
+  other_typing: z.boolean(),
 });
 
 const conversationListSchema = z.object({
@@ -34,6 +37,8 @@ const conversationListSchema = z.object({
 const messagePageSchema = z.object({
   items: z.array(chatMessageSchema),
   has_more: z.boolean(),
+  other_last_read_at: z.string().nullable().default(null),
+  other_typing: z.boolean().default(false),
 });
 const unreadSchema = z.object({ unread_total: z.number().int().nonnegative() });
 
@@ -95,4 +100,17 @@ export function markConversationRead(conversationId: string) {
     method: "POST",
     schema: unreadSchema,
   });
+}
+
+/** "I am typing" — the other person sees it for a few seconds; call again while typing. */
+export function sendTyping(conversationId: string): Promise<null> {
+  return apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/typing`, {
+    method: "POST",
+    schema: z.null(),
+  });
+}
+
+/** True when the other person has read up to (and including) a message sent at `sentAt`. */
+export function isSeen(otherLastReadAt: string | null, sentAt: string): boolean {
+  return otherLastReadAt !== null && new Date(otherLastReadAt) >= new Date(sentAt);
 }

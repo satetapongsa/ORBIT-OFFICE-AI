@@ -188,3 +188,43 @@ def test_note_summary_errors(as_user: AsUser, api_app: FastAPI) -> None:
 
 def test_notes_need_the_permission(as_user: AsUser) -> None:
     assert as_user([]).get(NOTES).status_code == 403
+
+
+def test_read_receipts_and_typing_indicator(as_user: AsUser, db: Factory) -> None:
+    alice, bob = as_user(["EMPLOYEE"]), as_user(["EMPLOYEE"])
+    cid = open_chat(alice, bob)
+    sent = alice.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ถึงไหนแล้ว"}).json()
+
+    page = alice.get(f"{CHAT}/conversations/{cid}/messages").json()
+    assert page["other_last_read_at"] is None  # Bob has not opened it yet
+    assert page["other_typing"] is False
+
+    bob.post(f"{CHAT}/conversations/{cid}/read")
+    seen = alice.get(f"{CHAT}/conversations/{cid}/messages").json()["other_last_read_at"]
+    assert seen is not None and seen >= sent["created_at"]  # "อ่านแล้ว"
+    item = alice.get(f"{CHAT}/conversations").json()["items"][0]
+    assert item["other_last_read_at"] == seen
+
+    assert bob.post(f"{CHAT}/conversations/{cid}/typing").status_code == 204
+    assert alice.get(f"{CHAT}/conversations/{cid}/messages").json()["other_typing"] is True
+    assert alice.get(f"{CHAT}/conversations").json()["items"][0]["other_typing"] is True
+    assert bob.get(f"{CHAT}/conversations/{cid}/messages").json()["other_typing"] is False
+
+    # An old signal expires on its own...
+    from sqlalchemy import text
+
+    with db.engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE conversations SET low_typing_at = now() - interval '10 seconds',"
+                " high_typing_at = now() - interval '10 seconds'"
+            )
+        )
+    assert alice.get(f"{CHAT}/conversations/{cid}/messages").json()["other_typing"] is False
+    # ...and sending a message ends it at once.
+    bob.post(f"{CHAT}/conversations/{cid}/typing")
+    bob.post(f"{CHAT}/conversations/{cid}/messages", json={"body": "ใกล้เสร็จแล้ว"})
+    assert alice.get(f"{CHAT}/conversations/{cid}/messages").json()["other_typing"] is False
+
+    outsider = as_user(["EMPLOYEE"])
+    assert outsider.post(f"{CHAT}/conversations/{cid}/typing").status_code == 404

@@ -585,3 +585,14 @@ and private work notes with an AI summary. Polling keeps the free single-contain
 (no WebSockets through Vercel's proxy) and is enough for office chat; messages are private
 conversations, so they are not written to the audit log.
 
+## ADR-061 — Read receipts, send times and typing indicator in chat (2026-11-23)
+**Decision.** The existing per-participant read time is now returned to the other person
+(`other_last_read_at`): the newest own message shows "ส่งแล้ว" or "อ่านแล้ว · <time ago>", and
+the conversation list shows ✓ / ✓✓. Every message shows its send time (HH:mm, Asia/Bangkok) with
+day separators ("วันนี้", "เมื่อวาน", date). Typing: `POST /chat/conversations/{id}/typing`
+stores database time in `low_typing_at` / `high_typing_at` (migration `0013`); the other side
+sees "กำลังพิมพ์…" while the signal is under 6 s old; the client sends at most one signal every
+3 s and sending a message clears it.
+**Why.** Requested by the user ("like Messenger"). Database time on both sides avoids clock
+skew between browsers and the API.
+

@@ -41,6 +41,9 @@ class ConversationOut(BaseModel):
     last_message: MessageOut | None
     last_message_at: datetime | None
     unread_count: int = Field(ge=0)
+    # Read receipt: my messages up to this time have been seen by the other person.
+    other_last_read_at: datetime | None
+    other_typing: bool
 
 
 class ConversationList(BaseModel):
@@ -61,6 +64,8 @@ class MessagePage(BaseModel):
 
     items: list[MessageOut]
     has_more: bool
+    other_last_read_at: datetime | None = None
+    other_typing: bool = False
 
 
 class ChatUnread(BaseModel):
