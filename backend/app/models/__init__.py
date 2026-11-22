@@ -30,6 +30,7 @@ from app.models.identity import (
     UserRole,
     role_permissions,
 )
+from app.models.messaging import Conversation, DirectMessage, Note
 from app.models.notification import (
     EmailStatus,
     Notification,
@@ -65,7 +66,9 @@ __all__ = [
     "ChatMessage",
     "ChatRole",
     "ChatSession",
+    "Conversation",
     "Department",
+    "DirectMessage",
     "Document",
     "DocumentAcl",
     "DocumentCategory",
@@ -81,6 +84,7 @@ __all__ = [
     "FileType",
     "ImageType",
     "IndexStatus",
+    "Note",
     "Notification",
     "NotificationPreference",
     "NotificationType",

@@ -310,6 +310,15 @@
   `permission denied` for existing and later tables, downgrade/upgrade OK; backend suite green
   apart from the pgvector-version RAG tests of this sandbox.
 
+### Chat and personal notes (2026-11-22, ADR-060)
+- `/chat`: private conversations between employees, opened with "ส่งข้อความ" on a profile;
+  unread badge in the menu; history in `conversations` / `direct_messages`.
+- `/notes`: private notes with search and an AI summary stored on the note.
+- API: `/chat/*`, `/notes/*`; permissions `chat:use`, `notes:use` (EMPLOYEE); migration `0012`.
+- Verified: `tests/api/test_chat_and_notes.py` (9), `tests/chat-notes.test.tsx` (5); browser:
+  manager → profile → message, employee badge → reply, reply seen by polling, history after
+  reload, notes saved and reloaded, mobile thread/back without overflow.
+
 ## In Progress
 - Nothing. All phases (0–9) are complete.
 

@@ -567,3 +567,21 @@ password fails the policy, it prints why and returns 0 so the API still starts.
 **Why.** Render's free plan has no Shell, so `create-admin` cannot be run there. The password
 should be removed from the environment after the first sign-in.
 
+## ADR-060 — Direct messages and personal notes (2026-11-22)
+**Decision.** Two modules for every employee (`chat:use`, `notes:use` in the EMPLOYEE role).
+*Chat*: one private conversation per pair of users (`conversations`, ordered pair unique),
+messages in `direct_messages` (1–4,000 characters), read state as one timestamp per participant
+taken from the database clock. A thread is opened from the employee profile ("ส่งข้อความ");
+a new thread needs an active colleague who holds `chat:use`; history stays readable after a
+deactivation but no new messages are accepted. New messages arrive by polling (4 s in an open
+thread, 10 s for the list, 30 s for the menu badge). *Notes*: `notes` rows owned by one user,
+up to 20,000 characters, searchable by title/text; "สรุปด้วย AI" sends the note to the
+configured chat model without tools, stores the summary on the note and flags it as outdated
+once the text changes (`content_updated_at` vs `ai_summary_at`, both database time). Only the
+participants of a conversation and the owner of a note can read them: everyone else,
+administrators included, gets 404. Migration `0012` enables RLS on the new tables (ADR-058).
+**Why.** The user asked for chat from an employee's profile with history kept in the database,
+and private work notes with an AI summary. Polling keeps the free single-container layout
+(no WebSockets through Vercel's proxy) and is enough for office chat; messages are private
+conversations, so they are not written to the audit log.
+

@@ -11,6 +11,8 @@ import {
 } from "@/lib/navigation";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/dashboard" }));
+// The unread badge fetches on its own; it is covered in tests/chat-notes.test.tsx.
+vi.mock("@/features/chat/components/chat-unread-badge", () => ({ ChatUnreadBadge: () => null }));
 
 let permissions = new Set<string>();
 vi.mock("@/features/auth/hooks/use-session", () => ({

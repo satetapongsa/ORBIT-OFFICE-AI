@@ -57,6 +57,8 @@ class P(StrEnum):
 
     AI_CHAT = "ai:chat"
     AI_USE_TOOLS = "ai:use_tools"
+    CHAT_USE = "chat:use"
+    NOTES_USE = "notes:use"
 
     SYSTEM_CONFIGURE = "system:configure"
     SYSTEM_CONFIGURE_AI = "system:configure_ai"
@@ -100,6 +102,8 @@ PERMISSION_DESCRIPTIONS: dict[P, str] = {
     P.REPORTS_EXPORT: "ส่งออกรายงาน",
     P.AI_CHAT: "ใช้งานผู้ช่วย AI",
     P.AI_USE_TOOLS: "ให้ผู้ช่วย AI ใช้เครื่องมือของระบบ",
+    P.CHAT_USE: "แชทกับพนักงานคนอื่น",
+    P.NOTES_USE: "ใช้โน้ตส่วนตัว",
     P.SYSTEM_CONFIGURE: "ตั้งค่าระบบ",
     P.SYSTEM_CONFIGURE_AI: "ตั้งค่าผู้ให้บริการ AI",
     P.AUDIT_READ: "ดูบันทึกการใช้งานระบบ (Audit log)",
@@ -129,6 +133,8 @@ _EMPLOYEE: frozenset[P] = frozenset(
         P.ANALYTICS_READ_OWN,
         P.AI_CHAT,
         P.AI_USE_TOOLS,
+        P.CHAT_USE,
+        P.NOTES_USE,
     }
 )
 

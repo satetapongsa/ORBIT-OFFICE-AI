@@ -7,12 +7,14 @@ from app.api.v1.endpoints import (
     analytics,
     audit,
     auth,
+    chat,
     dashboard,
     departments,
     directory,
     documents,
     employees,
     health,
+    notes,
     notifications,
     roles,
     tasks,
@@ -36,3 +38,5 @@ api_router.include_router(employees.router)
 api_router.include_router(ai.router)
 api_router.include_router(tickets.router)
 api_router.include_router(analytics.router)
+api_router.include_router(chat.router)
+api_router.include_router(notes.router)

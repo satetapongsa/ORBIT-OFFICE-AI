@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { useSession } from "@/features/auth/hooks/use-session";
+import { ChatUnreadBadge } from "@/features/chat/components/chat-unread-badge";
 import { cn } from "@/lib/utils";
 import {
   MAIN_NAV,
@@ -66,6 +67,7 @@ function NavEntry({
     >
       <Icon className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{item.label}</span>
+      {item.key === "chat" ? <ChatUnreadBadge /> : null}
     </Link>
   );
 }

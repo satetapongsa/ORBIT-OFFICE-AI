@@ -84,6 +84,14 @@ recommended as well (ADR-058).
 - System roles cannot be deleted; custom roles cannot be deleted while assigned.
 - Deactivating a user revokes all of their sessions immediately.
 
+## 2a. Chat and notes (ADR-060)
+
+- Conversations are readable only by their two participants; notes only by their owner.
+  Every other user, administrators included, receives `404` (no admin read-out of messages).
+- Opening a new conversation requires an active colleague who holds `chat:use`; sending is
+  refused (409) once the other account is deactivated. 60 messages per user per minute.
+- AI note summaries send only that note, without tools, and are limited like other AI summaries.
+
 ## 3. Document ACL
 
 A user may access a document if **any** of the following is true (and the

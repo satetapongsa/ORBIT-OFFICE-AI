@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Mail, Phone, UserX } from "lucide-react";
+import { ArrowLeft, Mail, MessageSquare, Phone, UserX } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/common/empty-state";
@@ -67,7 +67,7 @@ function AccountCard({ employee }: { employee: EmployeeProfile }) {
 }
 
 export function EmployeeProfileView({ id }: { id: string }) {
-  const { me } = useSession();
+  const { me, has } = useSession();
   const employee = useEmployee(id);
 
   if (employee.isPending) {
@@ -132,6 +132,14 @@ export function EmployeeProfileView({ id }: { id: string }) {
             {!e.is_active ? <Badge variant="destructive">บัญชีถูกระงับ</Badge> : null}
           </div>
         </div>
+        {!isSelf && e.is_active && has("chat:use") ? (
+          <Button asChild className="sm:ml-auto">
+            <Link href={`/chat?with=${encodeURIComponent(e.id)}`}>
+              <MessageSquare aria-hidden />
+              ส่งข้อความ
+            </Link>
+          </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
