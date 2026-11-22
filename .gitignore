@@ -38,3 +38,6 @@ Thumbs.db
 # --- Local data ------------------------------------------------------------------
 *.log
 backups/
+
+# Local Redis snapshots
+dump.rdb
