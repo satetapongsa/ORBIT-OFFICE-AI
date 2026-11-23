@@ -25,6 +25,19 @@ class ChatPerson(BaseModel):
     is_active: bool
 
 
+class ChatAttachmentOut(BaseModel):
+    """A file in a chat (ADR-072). Download from ``/chat/attachments/{id}``."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    original_filename: str
+    file_type: str
+    mime_type: str
+    size_bytes: int
+    is_image: bool
+
+
 class MessageOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,6 +47,7 @@ class MessageOut(BaseModel):
     body: str
     created_at: datetime
     edited_at: datetime | None = None
+    attachment: ChatAttachmentOut | None = None
 
 
 class ConversationOut(BaseModel):
@@ -156,6 +170,7 @@ class GroupMessageOut(BaseModel):
     body: str
     created_at: datetime
     edited_at: datetime | None
+    attachment: ChatAttachmentOut | None = None
 
 
 class GroupSummary(BaseModel):

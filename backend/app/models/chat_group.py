@@ -7,9 +7,10 @@ from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
+from app.models.chat_attachment import ChatAttachment
 from app.models.identity import _in_check
 from app.models.messaging import MESSAGE_MAX_CHARS
 
@@ -70,9 +71,18 @@ class GroupMessage(UUIDPrimaryKeyMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     edited_at: Mapped[datetime | None] = mapped_column()
+    # A file or image (ADR-072); the body is then an optional caption.
+    attachment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_attachments.id", ondelete="CASCADE"), unique=True
+    )
+    attachment: Mapped[ChatAttachment | None] = relationship(lazy="selectin")
 
     __table_args__ = (
         CheckConstraint(_in_check("kind", GroupMessageKind), name="kind"),
-        CheckConstraint(f"char_length(body) BETWEEN 1 AND {MESSAGE_MAX_CHARS}", name="body_length"),
+        CheckConstraint(
+            f"char_length(body) <= {MESSAGE_MAX_CHARS} "
+            "AND (char_length(body) >= 1 OR attachment_id IS NOT NULL)",
+            name="body_length",
+        ),
         Index("ix_group_messages_group_created", "group_id", "created_at"),
     )

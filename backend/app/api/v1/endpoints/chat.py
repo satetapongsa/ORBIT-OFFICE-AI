@@ -5,9 +5,18 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 
-from app.api.deps import DbDep, per_user_rate_limit, require_permissions
+from app.api.deps import (
+    DbDep,
+    SettingsDep,
+    get_document_storage,
+    limit_uploads,
+    per_user_rate_limit,
+    require_permissions,
+)
+from app.api.v1.endpoints.documents import content_disposition
 from app.core.chat_hub import ChatHub
 from app.core.permissions import P
 from app.core.principal import CurrentUser
@@ -29,7 +38,9 @@ from app.schemas.messaging import (
     StartConversation,
 )
 from app.services import chat as chat_service
+from app.services import chat_files
 from app.services import chat_groups as group_service
+from app.services.uploads import FileStorage
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -40,6 +51,9 @@ def get_chat_hub(request: Request) -> ChatHub:
 
 
 HubDep = Annotated[ChatHub, Depends(get_chat_hub)]
+StorageDep = Annotated[FileStorage, Depends(get_document_storage)]
+FileField = Annotated[UploadFile, File(description="PDF, DOCX, XLSX, TXT, PNG or JPG")]
+CaptionField = Annotated[str | None, Form(max_length=4000)]
 
 ChatUser = Annotated[CurrentUser, Depends(require_permissions(P.CHAT_USE))]
 limit_messages = per_user_rate_limit("chat-send", lambda _s: 60, lambda _s: 60)
@@ -269,3 +283,71 @@ async def mark_group_read(
 async def group_typing(group_id: uuid.UUID, db: DbDep, user: ChatUser, hub: HubDep) -> Response:
     await group_service.set_typing(db, user, group_id, hub)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Files and images (ADR-072) ---------------------------------------------------------
+
+
+@router.post(
+    "/conversations/{conversation_id}/files",
+    response_model=MessageOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send a file or image (optional caption)",
+    dependencies=[Depends(limit_uploads)],
+)
+async def send_direct_file(
+    conversation_id: uuid.UUID,
+    db: DbDep,
+    settings: SettingsDep,
+    user: ChatUser,
+    hub: HubDep,
+    storage: StorageDep,
+    file: FileField,
+    body: CaptionField = None,
+) -> MessageOut:
+    return await chat_files.send_direct_file(
+        db, settings, storage, user, conversation_id, file, body, hub
+    )
+
+
+@router.post(
+    "/groups/{group_id}/files",
+    response_model=GroupMessageOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send a file or image to a group (optional caption)",
+    dependencies=[Depends(limit_uploads)],
+)
+async def send_group_file(
+    group_id: uuid.UUID,
+    db: DbDep,
+    settings: SettingsDep,
+    user: ChatUser,
+    hub: HubDep,
+    storage: StorageDep,
+    file: FileField,
+    body: CaptionField = None,
+) -> GroupMessageOut:
+    return await chat_files.send_group_file(db, settings, storage, user, group_id, file, body, hub)
+
+
+@router.get(
+    "/attachments/{attachment_id}",
+    response_class=StreamingResponse,
+    summary="Download a chat file (people in that chat only)",
+)
+async def download_attachment(
+    attachment_id: uuid.UUID, db: DbDep, user: ChatUser, storage: StorageDep
+) -> StreamingResponse:
+    attachment, stream = await chat_files.open_file(db, storage, user, attachment_id)
+    return StreamingResponse(
+        iter(stream),
+        media_type=attachment.mime_type,
+        headers={
+            # Always a download; the app shows images from a blob, never as a page.
+            "Content-Disposition": content_disposition(attachment.original_filename),
+            "Content-Length": str(attachment.size_bytes),
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Cache-Control": "private, max-age=3600",
+        },
+    )

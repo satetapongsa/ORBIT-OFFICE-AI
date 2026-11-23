@@ -746,3 +746,23 @@ DMs plus unread group messages. DMs and groups share one thread component with a
 per kind (`features/chat/components/thread.tsx`); the people picker moved to
 `components/common/people-picker.tsx` (also used by the calendar). Migration `0021` (tables
 locked from the Supabase Data API like the rest).
+
+## ADR-072 — Files and images in chat (2026-11-23)
+**Decision.** Direct messages and group chats can carry one file per message with an optional
+caption: a 📎 button, pasting an image, or dropping a file on the thread stages it in the
+composer; Enter sends it (the typed text becomes the caption). Accepted types and checks are the
+ticket-attachment ones (ADR-054): PNG/JPG images and PDF/DOCX/XLSX/TXT, at most
+`UPLOAD_MAX_BYTES` (25 MB), the type sniffed from the content (a renamed file is refused with
+415), the upload rate limit, server-generated keys `chat/dm/{conversation}/{id}` and
+`chat/groups/{group}/{id}`, and the object removed again when the database write fails.
+`POST /chat/conversations/{id}/files` and `POST /chat/groups/{id}/files` (multipart `file`,
+`body`) return the new message, which has `attachment` (`chat_attachments` row; the message's
+`body` may then be empty). `GET /chat/attachments/{id}` streams the file only to the two DM
+participants or the *current* members of the group (others, including people who left or were
+removed, get 404), always as a download with `nosniff` and a sandbox CSP; the app shows images
+from a `blob:` URL (thumbnail in the bubble, full size in a dialog) and files as a card with a
+download button. Lists show "📷 ส่งรูปภาพ" / "📎 name" for files without a caption. The caption
+can be edited; the file cannot be replaced. Chat files are not audit-logged per view (image
+previews load on every open). Deleting a group cascades its attachment rows; the objects are
+then removed by the daily orphan clean-up, which now treats `chat_attachments` keys as
+referenced. Migration `0022` (RLS-locked like the other tables).

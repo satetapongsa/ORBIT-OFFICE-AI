@@ -5,8 +5,8 @@ Run daily by Celery beat (`maintenance.purge`) or by hand with ``python -m app.c
 
 * deleted documents: documents soft-deleted more than ``DOCUMENT_PURGE_AFTER_DAYS`` ago -
   first their stored files, then the rows (versions, text, chunks and ACL cascade);
-* orphaned objects: stored files that no document version, task or ticket attachment refers to,
-  older than ``STORAGE_ORPHAN_GRACE_HOURS`` (failed uploads, removed attachments);
+* orphaned objects: stored files that no document version, task, ticket or chat attachment
+  refers to, older than ``STORAGE_ORPHAN_GRACE_HOURS`` (failed uploads, removed attachments);
 * chats: sessions deleted by their owner or idle longer than ``AI_CHAT_RETENTION_DAYS``
   (messages and action requests cascade);
 * sign-in data: refresh sessions and reset tokens expired, revoked or used more than
@@ -32,6 +32,7 @@ from app.core.security import utcnow
 from app.core.storage import ObjectStorage
 from app.models.ai import ChatSession
 from app.models.auth import PasswordResetToken, PendingRegistration, UserSession
+from app.models.chat_attachment import ChatAttachment
 from app.models.document import Document, DocumentVersion
 from app.models.notification import Notification
 from app.models.task import TaskAttachment
@@ -101,6 +102,7 @@ def purge_orphaned_objects(
     referenced = set(session.scalars(select(DocumentVersion.storage_key)).all())
     referenced |= set(session.scalars(select(TaskAttachment.storage_key)).all())
     referenced |= set(session.scalars(select(TicketAttachment.storage_key)).all())
+    referenced |= set(session.scalars(select(ChatAttachment.storage_key)).all())
     for obj in storage.iter_objects():
         if obj.key in referenced or obj.last_modified >= cutoff:
             continue

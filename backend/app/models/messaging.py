@@ -6,9 +6,10 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.chat_attachment import ChatAttachment
 
 MESSAGE_MAX_CHARS = 4000
 NOTE_MAX_CHARS = 20000
@@ -74,9 +75,18 @@ class DirectMessage(UUIDPrimaryKeyMixin, Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     edited_at: Mapped[datetime | None] = mapped_column()
+    # A file or image (ADR-072); the body is then an optional caption.
+    attachment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("chat_attachments.id", ondelete="CASCADE"), unique=True
+    )
+    attachment: Mapped[ChatAttachment | None] = relationship(lazy="selectin")
 
     __table_args__ = (
-        CheckConstraint(f"char_length(body) BETWEEN 1 AND {MESSAGE_MAX_CHARS}", name="body_length"),
+        CheckConstraint(
+            f"char_length(body) <= {MESSAGE_MAX_CHARS} "
+            "AND (char_length(body) >= 1 OR attachment_id IS NOT NULL)",
+            name="body_length",
+        ),
         Index("ix_direct_messages_conversation_created", "conversation_id", "created_at"),
     )
 

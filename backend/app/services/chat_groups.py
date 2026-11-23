@@ -22,6 +22,7 @@ from app.core.chat_hub import ChatHub
 from app.core.errors import NotFoundError, PermissionDeniedError, ValidationFailedError
 from app.core.permissions import P
 from app.core.principal import CurrentUser
+from app.models.chat_attachment import ChatAttachment
 from app.models.chat_group import (
     GROUP_MAX_MEMBERS,
     ChatGroup,
@@ -34,6 +35,7 @@ from app.models.identity import User
 from app.repositories import users as user_repo
 from app.schemas.common import ErrorDetail
 from app.schemas.messaging import (
+    ChatAttachmentOut,
     GroupCreate,
     GroupDetail,
     GroupMember,
@@ -138,6 +140,7 @@ def _msg_out(m: GroupMessage, names: dict[uuid.UUID, str]) -> GroupMessageOut:
         body=m.body,
         created_at=m.created_at,
         edited_at=m.edited_at,
+        attachment=ChatAttachmentOut.model_validate(m.attachment) if m.attachment else None,
     )
 
 
@@ -478,10 +481,15 @@ async def list_messages(
 
 
 async def send_message(
-    session: AsyncSession, user: CurrentUser, group_id: uuid.UUID, body: str, hub: ChatHub
+    session: AsyncSession,
+    user: CurrentUser,
+    group_id: uuid.UUID,
+    body: str,
+    hub: ChatHub,
+    attachment: ChatAttachment | None = None,
 ) -> GroupMessageOut:
     group, me = await _membership(session, user, group_id, lock=True)
-    message = GroupMessage(group_id=group.id, sender_id=user.id, body=body)
+    message = GroupMessage(group_id=group.id, sender_id=user.id, body=body, attachment=attachment)
     session.add(message)
     await session.flush()
     await session.refresh(message)

@@ -274,3 +274,23 @@ def test_ticket_attachments_are_not_orphans(db: Factory) -> None:
     report = _run(db, storage)
     assert report.orphaned_objects == 1
     assert set(storage.objects) == {"tickets/kept"}
+
+
+def test_chat_files_are_not_orphans(db: Factory) -> None:
+    """Files sent in chat (ADR-072) are referenced from chat_attachments and must survive."""
+    owner = db.user("chat-owner@example.com")
+    group = _sql(db, "INSERT INTO chat_groups (name) VALUES ('g') RETURNING id")
+    _sql(
+        db,
+        "INSERT INTO chat_attachments (group_id, uploaded_by, storage_key, original_filename,"
+        " file_type, mime_type, size_bytes, sha256) VALUES (:g, :u, 'chat/groups/kept',"
+        " 'a.png', 'PNG', 'image/png', 1, 'x')",
+        g=group,
+        u=owner,
+    )
+    storage = FakeStorage()
+    storage.add("chat/groups/kept", age=timedelta(days=60))
+    storage.add("chat/groups/gone", age=timedelta(days=60))  # its group was deleted
+    report = _run(db, storage)
+    assert report.orphaned_objects == 1
+    assert set(storage.objects) == {"chat/groups/kept"}

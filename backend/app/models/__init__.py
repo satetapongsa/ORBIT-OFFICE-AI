@@ -6,6 +6,7 @@ from app.models.attendance import AttendanceRecord, WorkMode
 from app.models.audit import AuditLog
 from app.models.auth import PasswordResetToken, PendingRegistration, UserSession
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.chat_attachment import ChatAttachment
 from app.models.chat_group import ChatGroup, ChatGroupMember, GroupMessage
 from app.models.document import (
     AccessLevel,
@@ -71,6 +72,7 @@ __all__ = [
     "AttendanceRecord",
     "AuditLog",
     "Base",
+    "ChatAttachment",
     "ChatGroup",
     "ChatGroupMember",
     "ChatMessage",

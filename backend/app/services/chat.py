@@ -25,6 +25,7 @@ from app.core.errors import (
 )
 from app.core.permissions import P
 from app.core.principal import CurrentUser
+from app.models.chat_attachment import ChatAttachment
 from app.models.identity import User
 from app.models.messaging import Conversation, DirectMessage
 from app.repositories import users as user_repo
@@ -276,12 +277,15 @@ async def send_message(
     conversation_id: uuid.UUID,
     body: str,
     hub: ChatHub,
+    attachment: ChatAttachment | None = None,
 ) -> MessageOut:
     conversation = await _get_mine(session, user, conversation_id)
     other = await user_repo.get_by_id(session, conversation.other_user_id(user.id))
     if other is None or not other.is_active:
         raise ConflictError("บัญชีของพนักงานคนนี้ถูกระงับอยู่ จึงส่งข้อความไม่ได้")
-    message = DirectMessage(conversation_id=conversation.id, sender_id=user.id, body=body)
+    message = DirectMessage(
+        conversation_id=conversation.id, sender_id=user.id, body=body, attachment=attachment
+    )
     session.add(message)
     await session.flush()
     await session.refresh(message)

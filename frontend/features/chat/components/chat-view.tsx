@@ -27,6 +27,9 @@ import {
   listMessages,
   markConversationRead,
   markGroupRead,
+  messagePreview,
+  sendFile,
+  sendGroupFile,
   sendGroupMessage,
   sendGroupTyping,
   sendMessage,
@@ -123,7 +126,7 @@ function ConversationItem({
 }) {
   const last = conversation.last_message;
   const mineLast = last !== null && last.sender_id === myId;
-  const preview = last ? `${mineLast ? "คุณ: " : ""}${last.body}` : "ยังไม่มีข้อความ";
+  const preview = last ? `${mineLast ? "คุณ: " : ""}${messagePreview(last)}` : "ยังไม่มีข้อความ";
   const seen = mineLast && isSeen(conversation.other_last_read_at, last.created_at);
   return (
     <ListRow
@@ -175,7 +178,7 @@ function GroupItem({
         ? "คุณ: "
         : `${last.sender_name ?? "ผู้ใช้"}: `
       : "";
-  const preview = last ? `${who}${last.body}` : "ยังไม่มีข้อความ";
+  const preview = last ? `${who}${messagePreview(last)}` : "ยังไม่มีข้อความ";
   return (
     <ListRow
       active={active}
@@ -245,6 +248,7 @@ function DmThread({ conversation, onBack }: { conversation: Conversation; onBack
         };
       },
       send: async (body) => fromDm(await sendMessage(id, body)),
+      sendFile: async (file, caption) => fromDm(await sendFile(id, file, caption)),
       edit: async (mid, body) => fromDm(await editMessage(id, mid, body)),
       markRead: () => markConversationRead(id),
       typing: () => sendTyping(id),
@@ -314,6 +318,7 @@ function GroupThread({
         };
       },
       send: async (body) => fromGroup(await sendGroupMessage(id, body)),
+      sendFile: async (file, caption) => fromGroup(await sendGroupFile(id, file, caption)),
       edit: async (mid, body) => fromGroup(await editGroupMessage(id, mid, body)),
       markRead: () => markGroupRead(id),
       typing: () => sendGroupTyping(id),

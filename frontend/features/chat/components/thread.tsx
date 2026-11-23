@@ -1,8 +1,17 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { Check, CheckCheck, Loader2, Pencil, Send } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Check, CheckCheck, Loader2, Paperclip, Pencil, Send, X } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { toast } from "sonner";
 
 import { ErrorState } from "@/components/common/error-state";
@@ -13,7 +22,15 @@ import { useSession } from "@/features/auth/hooks/use-session";
 import { dayKey, formatChatDay, formatDateTime, formatRelative, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/services/api-client";
-import { chatQueryKeys, MESSAGE_MAX_CHARS } from "@/services/chat";
+import {
+  CHAT_ACCEPTED_FILES,
+  chatQueryKeys,
+  checkChatFile,
+  MESSAGE_MAX_CHARS,
+  type ChatAttachment,
+} from "@/services/chat";
+
+import { ChatAttachmentView } from "./chat-attachment";
 
 /**
  * One thread component for direct messages and group chats (ADR-071). Each kind supplies a
@@ -39,6 +56,7 @@ export interface ThreadMessage {
   body: string;
   created_at: string;
   edited_at: string | null;
+  attachment?: ChatAttachment | null;
 }
 
 export interface ThreadReader {
@@ -65,6 +83,8 @@ export interface ThreadSource {
     signal?: AbortSignal,
   ) => Promise<ThreadPage>;
   send: (body: string) => Promise<ThreadMessage>;
+  /** A file or image with an optional caption (ADR-072). */
+  sendFile: (file: File, caption: string) => Promise<ThreadMessage>;
   edit: (id: string, body: string) => Promise<ThreadMessage>;
   markRead: () => Promise<unknown>;
   typing: () => Promise<unknown>;
@@ -237,8 +257,10 @@ export function Thread({
   // Sends go out one after another so quick messages keep their order.
   const queueRef = useRef<Promise<unknown>>(Promise.resolve());
   const send = useMutation({
-    mutationFn: ({ body }: { body: string; tempId: string }) => {
-      const run = queueRef.current.catch(() => undefined).then(() => source.send(body));
+    mutationFn: ({ body, file }: { body: string; tempId: string; file?: File }) => {
+      const run = queueRef.current
+        .catch(() => undefined)
+        .then(() => (file ? source.sendFile(file, body) : source.send(body)));
       queueRef.current = run;
       return run;
     },
@@ -252,10 +274,16 @@ export function Thread({
       setPending((current) => current.filter((m) => m.id !== tempId));
       void refreshLists();
     },
-    onError: (error, { body, tempId }) => {
+    onError: (error, { body, tempId, file }) => {
       setPending((current) => current.filter((m) => m.id !== tempId));
       setDraft((current) => current || body);
-      toast.error(errorText(error, "ส่งข้อความไม่สำเร็จ กรุณาลองใหม่"));
+      if (file) setStaged((current) => current ?? file);
+      toast.error(
+        errorText(
+          error,
+          file ? "ส่งไฟล์ไม่สำเร็จ กรุณาลองใหม่" : "ส่งข้อความไม่สำเร็จ กรุณาลองใหม่",
+        ),
+      );
     },
   });
 
@@ -305,10 +333,41 @@ export function Thread({
     }
   }
 
+  // A file waiting in the composer (picked, pasted or dropped); the draft becomes its caption.
+  const [staged, setStaged] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function stage(file: File | undefined | null) {
+    if (!file || !canSend) return;
+    const problem = checkChatFile(file);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
+    setStaged(file);
+  }
+
+  function onPaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const file = Array.from(event.clipboardData.files)[0];
+    if (file) {
+      event.preventDefault();
+      stage(file);
+    }
+  }
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDragging(false);
+    stage(event.dataTransfer.files[0]);
+  }
+
   function submit() {
     const body = draft.trim();
-    if (!body || !canSend) return;
+    const file = staged;
+    if ((!body && !file) || !canSend) return;
     setDraft("");
+    setStaged(null);
     lastPingRef.current = 0;
     const tempId = `${PENDING_PREFIX}${crypto.randomUUID()}`;
     setPending((current) => [
@@ -321,9 +380,19 @@ export function Thread({
         body,
         created_at: new Date().toISOString(),
         edited_at: null,
+        attachment: file
+          ? {
+              id: tempId,
+              original_filename: file.name,
+              file_type: file.name.split(".").pop()?.toUpperCase() ?? "",
+              mime_type: file.type,
+              size_bytes: file.size,
+              is_image: /^image\//.test(file.type),
+            }
+          : null,
       },
     ]);
-    send.mutate({ body, tempId });
+    send.mutate({ body, tempId, file: file ?? undefined });
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -361,7 +430,27 @@ export function Thread({
   }
 
   return (
-    <section aria-label={label} className="flex h-full min-h-0 flex-col">
+    <section
+      aria-label={label}
+      className={cn(
+        "relative flex h-full min-h-0 flex-col",
+        dragging && "ring-primary ring-2 ring-inset",
+      )}
+      onDragOver={(event) => {
+        if (!canSend || !event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
+      onDrop={onDrop}
+    >
+      {dragging ? (
+        <div className="bg-background/80 text-primary pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-sm font-medium">
+          วางไฟล์ที่นี่เพื่อส่ง
+        </div>
+      ) : null}
       {header}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4" aria-live="polite">
@@ -479,14 +568,29 @@ export function Thread({
                             "max-w-[80%] min-w-0 rounded-2xl px-3.5 py-2 text-sm leading-relaxed [overflow-wrap:anywhere] whitespace-pre-wrap",
                             mine ? "bg-primary text-primary-foreground" : "bg-muted",
                             isPending && "opacity-70",
+                            m.attachment && "space-y-1.5 p-1.5",
                           )}
                         >
-                          {m.body}
+                          {m.attachment ? (
+                            <ChatAttachmentView
+                              attachment={m.attachment}
+                              mine={mine}
+                              pending={isPending}
+                            />
+                          ) : null}
+                          {m.attachment ? (
+                            m.body ? (
+                              <span className="block px-2">{m.body}</span>
+                            ) : null
+                          ) : (
+                            m.body
+                          )}
                           <time
                             dateTime={m.created_at}
                             title={formatDateTime(m.created_at)}
                             className={cn(
                               "mt-0.5 block text-right text-[10px] whitespace-nowrap",
+                              m.attachment && "px-2 pb-0.5",
                               mine ? "text-primary-foreground/70" : "text-muted-foreground",
                             )}
                           >
@@ -494,7 +598,7 @@ export function Thread({
                             {formatTime(m.created_at)}
                           </time>
                         </div>
-                        {!isPending && mine && canSend ? (
+                        {!isPending && mine && canSend && m.body ? (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -542,17 +646,60 @@ export function Thread({
         <div ref={bottomRef} />
       </div>
 
+      {staged ? (
+        <div className="flex items-center gap-2 border-t px-3 pt-3" data-testid="staged-file">
+          <Paperclip className="text-muted-foreground size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 truncate text-sm">{staged.name}</span>
+          <span className="text-muted-foreground shrink-0 text-xs">
+            พิมพ์คำอธิบาย (ไม่บังคับ) แล้วกด Enter
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            onClick={() => setStaged(null)}
+            aria-label="ยกเลิกไฟล์ที่เลือก"
+          >
+            <X className="size-4" aria-hidden />
+          </Button>
+        </div>
+      ) : null}
       <form
-        className="flex items-end gap-2 border-t p-3"
+        className={cn("flex items-end gap-2 p-3", !staged && "border-t")}
         onSubmit={(event) => {
           event.preventDefault();
           submit();
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={CHAT_ACCEPTED_FILES}
+          className="hidden"
+          aria-label="เลือกไฟล์หรือรูปที่จะส่ง"
+          data-testid="chat-file-input"
+          onChange={(event) => {
+            stage(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          disabled={!canSend}
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="แนบไฟล์หรือรูป"
+          title="แนบไฟล์หรือรูป (PNG, JPG, PDF, DOCX, XLSX, TXT · ไม่เกิน 25 MB)"
+        >
+          <Paperclip aria-hidden />
+        </Button>
         <Textarea
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           maxLength={MESSAGE_MAX_CHARS}
           rows={1}
           disabled={!canSend}
@@ -563,7 +710,7 @@ export function Thread({
         <Button
           type="submit"
           size="icon"
-          disabled={!draft.trim() || !canSend}
+          disabled={(!draft.trim() && !staged) || !canSend}
           aria-label="ส่งข้อความ"
         >
           <Send aria-hidden />

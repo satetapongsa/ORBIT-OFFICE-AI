@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { apiRequest } from "@/services/api-client";
+import { ApiError, apiDownload, apiRequest } from "@/services/api-client";
 
 /** Mirrors backend `app/schemas/messaging.py` (chat part). */
 export const chatPersonSchema = z.object({
@@ -11,6 +11,17 @@ export const chatPersonSchema = z.object({
   is_active: z.boolean(),
 });
 
+/** A file or image in a chat (ADR-072). */
+export const chatAttachmentSchema = z.object({
+  id: z.string(),
+  original_filename: z.string(),
+  file_type: z.string(),
+  mime_type: z.string(),
+  size_bytes: z.number().int(),
+  is_image: z.boolean(),
+});
+export type ChatAttachment = z.infer<typeof chatAttachmentSchema>;
+
 export const chatMessageSchema = z.object({
   id: z.string(),
   conversation_id: z.string(),
@@ -18,6 +29,7 @@ export const chatMessageSchema = z.object({
   body: z.string(),
   created_at: z.string(),
   edited_at: z.string().nullable().default(null),
+  attachment: chatAttachmentSchema.nullable().default(null),
 });
 
 export const conversationSchema = z.object({
@@ -167,6 +179,7 @@ export const groupMessageSchema = z.object({
   body: z.string(),
   created_at: z.string(),
   edited_at: z.string().nullable().default(null),
+  attachment: chatAttachmentSchema.nullable().default(null),
 });
 
 export const groupSummarySchema = z.object({
@@ -276,4 +289,74 @@ export function markGroupRead(id: string) {
 
 export function sendGroupTyping(id: string): Promise<null> {
   return apiRequest(`${groupPath(id)}/typing`, { method: "POST", schema: z.null() });
+}
+
+// --- Files and images (ADR-072) ---------------------------------------------------------
+
+export const CHAT_ACCEPTED_FILES = ".pdf,.docx,.xlsx,.txt,.png,.jpg,.jpeg";
+const CHAT_EXTENSIONS = ["pdf", "docx", "xlsx", "txt", "png", "jpg", "jpeg"];
+export const CHAT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+/** Quick check before uploading (the server checks the real content again). */
+export function checkChatFile(file: File): string | null {
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!CHAT_EXTENSIONS.includes(ext)) return "ส่งได้เฉพาะรูป PNG/JPG และไฟล์ PDF, DOCX, XLSX, TXT";
+  if (file.size === 0) return "ไฟล์ว่างเปล่า";
+  if (file.size > CHAT_MAX_FILE_BYTES) return "ไฟล์มีขนาดใหญ่เกิน 25 MB";
+  return null;
+}
+
+function fileForm(file: File, caption: string): FormData {
+  const form = new FormData();
+  form.set("file", file);
+  if (caption) form.set("body", caption);
+  return form;
+}
+
+export function sendFile(conversationId: string, file: File, caption = ""): Promise<ChatMessage> {
+  return apiRequest(`/chat/conversations/${encodeURIComponent(conversationId)}/files`, {
+    method: "POST",
+    schema: chatMessageSchema,
+    body: fileForm(file, caption),
+  });
+}
+
+export function sendGroupFile(groupId: string, file: File, caption = ""): Promise<GroupMessage> {
+  return apiRequest(`${groupPath(groupId)}/files`, {
+    method: "POST",
+    schema: groupMessageSchema,
+    body: fileForm(file, caption),
+  });
+}
+
+const attachmentPath = (id: string) => `/chat/attachments/${encodeURIComponent(id)}`;
+
+export function downloadChatFile(attachment: ChatAttachment) {
+  return apiDownload(attachmentPath(attachment.id), {
+    fallbackName: attachment.original_filename,
+  });
+}
+
+/** Image bytes for an in-chat preview (shown only through a blob: URL in an <img>). */
+export async function fetchChatImage(id: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await fetch(`/api/v1${attachmentPath(id)}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  if (!response.ok) {
+    throw new ApiError({
+      status: response.status,
+      code: "preview_failed",
+      message: "แสดงรูปไม่สำเร็จ",
+    });
+  }
+  return response.blob();
+}
+
+/** One line for chat lists: the caption, or what was sent. */
+export function messagePreview(m: { body: string; attachment: ChatAttachment | null }): string {
+  if (m.body) return m.body;
+  if (m.attachment)
+    return m.attachment.is_image ? "📷 ส่งรูปภาพ" : `📎 ${m.attachment.original_filename}`;
+  return "";
 }
