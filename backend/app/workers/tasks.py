@@ -88,6 +88,16 @@ def index_document_version(version_id: str, force: bool = False) -> str:
     return _index(uuid.UUID(version_id), force=force)
 
 
+@celery_app.task(name="calendar.send_reminders")
+def send_meeting_reminders() -> int:
+    """Meeting reminders, every minute (scheduled by Celery beat, ADR-070)."""
+    from app.core.config import get_settings
+    from app.services.meetings import send_due_reminders
+
+    with sync_session_scope() as session:
+        return send_due_reminders(session, get_settings().app_timezone)
+
+
 @celery_app.task(name="maintenance.purge")
 def purge_expired_data() -> dict[str, int | bool]:
     """Daily retention clean-up (scheduled by Celery beat, see ``celery_app``)."""

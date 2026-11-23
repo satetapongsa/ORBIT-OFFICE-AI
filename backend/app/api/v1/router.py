@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     attendance,
     audit,
     auth,
+    calendar,
     chat,
     dashboard,
     departments,
@@ -46,3 +47,4 @@ api_router.include_router(notes.router)
 api_router.include_router(announcements.router)
 api_router.include_router(leave.router)
 api_router.include_router(attendance.router)
+api_router.include_router(calendar.router)

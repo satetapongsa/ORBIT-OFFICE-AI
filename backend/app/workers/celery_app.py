@@ -40,6 +40,11 @@ celery_app.conf.update(
     result_expires=24 * 3600,
     broker_connection_retry_on_startup=True,
     beat_schedule={
+        "meeting-reminders": {
+            "task": "calendar.send_reminders",
+            "schedule": 60.0,
+            "options": {"queue": "default", "expires": 55},
+        },
         # 03:15 Asia/Bangkok, a quiet hour for the office (ADR-051).
         "daily-purge": {
             "task": "maintenance.purge",

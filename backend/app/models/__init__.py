@@ -33,6 +33,7 @@ from app.models.identity import (
     role_permissions,
 )
 from app.models.leave import LeaveQuota, LeaveRequest, LeaveType
+from app.models.meeting import Meeting, MeetingAttendee, MeetingResponse
 from app.models.messaging import Conversation, DirectMessage, Note
 from app.models.notification import (
     EmailStatus,
@@ -93,6 +94,9 @@ __all__ = [
     "LeaveQuota",
     "LeaveRequest",
     "LeaveType",
+    "Meeting",
+    "MeetingAttendee",
+    "MeetingResponse",
     "Note",
     "Notification",
     "NotificationPreference",

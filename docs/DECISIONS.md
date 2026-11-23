@@ -713,3 +713,19 @@ combines check-ins with approved leave (present / late / on leave / not yet) and
 per person (with leave days in working days) downloadable as CSV with a BOM for Excel.
 Check-in/out are audit-logged. Migration `0019`.
 
+## ADR-070 — Calendar and meetings (2026-11-23)
+**Decision.** `/calendar` (menu "ปฏิทิน", `calendar:use` for every employee): a Monday-first
+month grid with my meetings (filled = accepted, dashed = not answered, struck through =
+declined/cancelled) and the approved leave of my department (everyone for HR), a panel with the
+selected day's items, and a meeting dialog. Anyone schedules a meeting (title, date, start/end,
+place, an `https://` online link, agenda, reminder 0–1440 min, attendees from the directory);
+it may not end in the past or last more than 24 h. While choosing people and time the form
+asks `POST /calendar/availability` and warns about overlapping meetings (titles only for
+meetings the viewer attends, otherwise "ประชุมอื่น") and approved leave. Meetings are visible to
+the organizer and attendees only (404 otherwise). The organizer edits (a new time resets
+everyone's answer), adds/removes attendees and cancels; attendees answer เข้าร่วม / อาจเข้าร่วม /
+ไม่เข้าร่วม. Notifications (`MEETING`): invitation, update, removal, cancellation, a decline to
+the organizer, and a reminder `reminder_minutes` before the start sent by a Celery beat job every
+minute (`calendar.send_reminders`, once per meeting, not to people who declined; reset when the
+time changes). Create/update/cancel are audit-logged. Migration `0020`.
+

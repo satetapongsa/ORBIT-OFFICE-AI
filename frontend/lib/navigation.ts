@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  CalendarDays,
   Clock,
   FileText,
   Headset,
@@ -94,6 +95,14 @@ export const MAIN_NAV: NavItem[] = [
     icon: ListChecks,
     permission: "tasks:read_own",
     phase: 5,
+  },
+  {
+    key: "calendar",
+    label: "ปฏิทิน",
+    href: "/calendar",
+    icon: CalendarDays,
+    permission: "calendar:use",
+    phase: 8,
   },
   {
     key: "attendance",
