@@ -661,4 +661,8 @@ permissions and history.
 provider, URL and key as `AI_CHAT_*`, answers capped by `AI_QUICK_MAX_TOKENS`, default 1024).
 The Render Blueprint sets it to Groq's `llama-3.1-8b-instant`; empty means the main model.
 The full assistant is unchanged.
+**Update 2 (2026-11-23).** In production Groq refused the quick model (401/403/404). Quick
+questions now fall back to the main chat model when the quick model is refused before any text
+arrives, and the OpenAI-compatible adapter logs the provider's short error code/type
+(e.g. `model_not_found`) with the model name — never the error message.
 

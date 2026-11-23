@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 from app.core.logging import get_logger
 from app.services.ai.providers.base import (
+    MSG_AUTH,
     ChatProvider,
     Completion,
     Message,
@@ -69,9 +70,39 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 
 
 async def stream_answer(
+    provider: ChatProvider,
+    question: str,
+    *,
+    timezone: str,
+    fallback: ChatProvider | None = None,
+) -> AsyncIterator[str]:
+    """Yields `delta` events with text, then `done` (or one `error` event).
+
+    If the quick model is refused as misconfigured (e.g. the model was retired) before any
+    text arrived, the question is answered by ``fallback`` (the main chat model) instead.
+    """
+    try:
+        async for chunk in _stream_once(provider, question, timezone=timezone):
+            yield chunk
+    except _MisconfiguredBeforeText:
+        if fallback is None or fallback is provider:
+            yield _sse("error", {"code": "ai_provider_misconfigured", "message": MSG_AUTH})
+            return
+        logger.warning("quick_model_unavailable_using_main_model", model=provider.model)
+        try:
+            async for chunk in _stream_once(fallback, question, timezone=timezone):
+                yield chunk
+        except _MisconfiguredBeforeText:
+            yield _sse("error", {"code": "ai_provider_misconfigured", "message": MSG_AUTH})
+
+
+class _MisconfiguredBeforeText(Exception):
+    pass
+
+
+async def _stream_once(
     provider: ChatProvider, question: str, *, timezone: str
 ) -> AsyncIterator[str]:
-    """Yields `delta` events with text, then `done` (or one `error` event)."""
     sent_any = False
     try:
         async for event in provider.stream(
@@ -100,6 +131,8 @@ async def stream_answer(
             return
         yield _sse("done", {})
     except ProviderError as exc:
+        if exc.code == "ai_provider_misconfigured" and not sent_any:
+            raise _MisconfiguredBeforeText from None
         yield _sse("error", {"code": exc.code, "message": exc.message})
     except Exception as exc:  # never leak details into the stream
         logger.warning("quick_answer_failed", error_type=type(exc).__name__)

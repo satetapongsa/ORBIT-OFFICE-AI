@@ -105,3 +105,34 @@ def test_quick_provider_settings() -> None:
     assert quick._max_tokens == 1024  # type: ignore[attr-defined]
     disabled = make_settings(ai_quick_model="llama-3.1-8b-instant")
     assert build_quick_provider(disabled) is None  # no AI provider configured at all
+
+
+def test_main_model_answers_when_the_quick_model_is_refused(
+    as_user: AsUser, api_app: FastAPI
+) -> None:
+    refused = ProviderError("การตั้งค่าผู้ให้บริการ AI ไม่ถูกต้อง", code="ai_provider_misconfigured")
+    cheap = ScriptedProvider(model="retired-model", error=refused)
+    main = ScriptedProvider(model="main-model")
+    api_app.state.quick_provider = cheap
+    api_app.state.chat_provider = main
+    client = as_user(["EMPLOYEE"])
+
+    main.turns.append(say("ตอบจากโมเดลหลัก"))
+    stream = events(client.post(QUICK, json={"question": "สวัสดี"}).text)
+    assert [n for n, _ in stream][-1] == "done"
+    assert "".join(d["text"] for n, d in stream if n == "delta") == "ตอบจากโมเดลหลัก"
+    assert len(cheap.requests) == 1 and len(main.requests) == 1
+
+    # Without a separate quick model there is nothing to fall back to.
+    api_app.state.quick_provider = None
+    main.error = refused
+    stream = events(client.post(QUICK, json={"question": "สวัสดี"}).text)
+    assert stream == [
+        (
+            "error",
+            {
+                "code": "ai_provider_misconfigured",
+                "message": "การตั้งค่าผู้ให้บริการ AI ไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบ",
+            },
+        )
+    ]

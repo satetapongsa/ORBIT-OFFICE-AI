@@ -393,3 +393,35 @@ def test_build_chat_provider() -> None:
         )
     )
     assert isinstance(local, OpenAICompatibleProvider)
+
+
+def test_openai_compatible_logs_the_error_code_but_never_the_message() -> None:
+    from structlog.testing import capture_logs
+
+    from app.services.ai.providers.base import ProviderError
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            404,
+            json={
+                "error": {
+                    "message": "The model `x` does not exist SECRET-DETAIL",
+                    "type": "invalid_request_error",
+                    "code": "model_not_found",
+                }
+            },
+        )
+
+    with capture_logs() as logs:
+        try:
+            collect(openai(handler))
+        except ProviderError as exc:
+            assert exc.code == "ai_provider_misconfigured"
+        else:  # pragma: no cover
+            raise AssertionError("expected ProviderError")
+    entry = next(e for e in logs if e["event"] == "openai_compatible_api_error")
+    assert entry["status_code"] == 404
+    assert entry["error_code"] == "model_not_found"
+    assert entry["error_type"] == "invalid_request_error"
+    assert entry["model"] == "qwen3:8b"
+    assert "SECRET-DETAIL" not in str(logs)

@@ -125,8 +125,11 @@ class OpenAICompatibleProvider:
                 client.stream("POST", self._url, json=payload, headers=self._headers) as resp,
             ):
                 if resp.status_code != 200:
-                    await resp.aread()  # drain; the body is never logged or shown
-                    raise _status_error(resp.status_code)
+                    # The body is never shown; only its short error code/type is logged
+                    # (e.g. "model_not_found") so the cause can be found in the logs.
+                    raise _status_error(
+                        resp.status_code, model=self.model, **_error_kind(await resp.aread())
+                    )
                 async for line in resp.aiter_lines():
                     if not line.startswith("data:"):
                         continue
@@ -192,8 +195,22 @@ class OpenAICompatibleProvider:
         )
 
 
-def _status_error(status: int) -> ProviderError:
-    logger.warning("openai_compatible_api_error", status_code=status)
+def _error_kind(body: bytes) -> dict[str, str]:
+    """``error.code`` / ``error.type`` from an OpenAI-style error body (identifiers only)."""
+    try:
+        error = json.loads(body).get("error") or {}
+    except (ValueError, AttributeError):
+        return {}
+    out: dict[str, str] = {}
+    for key in ("code", "type"):
+        value = error.get(key) if isinstance(error, dict) else None
+        if isinstance(value, str) and value.replace("_", "").replace("-", "").isalnum():
+            out[f"error_{key}"] = value[:64]
+    return out
+
+
+def _status_error(status: int, **context: str) -> ProviderError:
+    logger.warning("openai_compatible_api_error", status_code=status, **context)
     if status in (401, 403, 404):
         return ProviderError(MSG_AUTH, code="ai_provider_misconfigured")
     if status == 429:

@@ -165,14 +165,16 @@ async def quick_answer(
     user: ChatUser,
     provider: ProviderDep,
 ) -> StreamingResponse:
-    # AI_QUICK_MODEL (a cheaper, faster model) when configured, otherwise the main model.
-    provider = getattr(request.app.state, "quick_provider", None) or provider
+    # AI_QUICK_MODEL (a cheaper, faster model) when configured, otherwise the main model;
+    # if the quick model is refused, the main model answers instead.
+    main = provider
+    provider = getattr(request.app.state, "quick_provider", None) or main
     if provider is None:
         raise AINotConfiguredError()
     # Nothing below uses the database: give the connection back before the answer streams.
     await db.close()
     return StreamingResponse(
-        quick.stream_answer(provider, body.question, timezone=settings.app_timezone),
+        quick.stream_answer(provider, body.question, timezone=settings.app_timezone, fallback=main),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-store, no-transform", "X-Accel-Buffering": "no"},
     )
