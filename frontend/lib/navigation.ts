@@ -9,6 +9,7 @@ import {
   Megaphone,
   MessagesSquare,
   NotebookPen,
+  Plane,
   type LucideIcon,
   Settings,
   Activity,
@@ -92,6 +93,14 @@ export const MAIN_NAV: NavItem[] = [
     icon: ListChecks,
     permission: "tasks:read_own",
     phase: 5,
+  },
+  {
+    key: "leave",
+    label: "ลางาน",
+    href: "/leave",
+    icon: Plane,
+    permission: "leave:request",
+    phase: 8,
   },
   {
     key: "employees",

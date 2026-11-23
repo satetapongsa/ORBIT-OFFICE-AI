@@ -681,3 +681,21 @@ the next modules, and the permissions for leave, attendance and calendar are def
 `attendance:read_department`, `attendance:read_all`, `calendar:use`). Create/update/delete are
 audit-logged.
 
+## ADR-068 — Leave requests (2026-11-23)
+**Decision.** `/leave` (menu "ลางาน", `leave:request` for every employee) with tabs: my
+leave (balance card per type: quota, used, pending, remaining; "ยื่นใบลา" with a live
+working-day count; my requests with cancel), approvals (`leave:approve_department` for the
+requester's department — MANAGER — or `leave:manage` for everyone — HR), "ใครลาบ้าง" (approved
+leave of my department per working day, without reasons; HR sees everyone) and settings
+(`leave:manage`: days per year and active flag per type; per-person quotas via
+`PUT /leave/quotas`). Types default to the Thai Labour Protection Act minimums (annual 6, sick
+30, personal 3, maternity 98, unpaid unlimited) and are re-created if the table is empty. Days
+are Monday–Friday (public holidays are not modelled yet); a single day may be a morning or
+afternoon half. Rules: no overlap with my pending/approved leave (two different halves of one
+day are allowed), no request across a year boundary, pending requests reserve quota, nobody
+decides their own request, rejection needs a reason, a requester can cancel a pending request
+or an approved one that has not started (HR can cancel any). Notifications (`LEAVE`): new
+request to the department's approvers (or HR if there are none), decision and cancellation by
+someone else to the requester. Reasons and decision notes are visible only to the requester and
+approvers. Every action is audit-logged. Migration `0018`.
+

@@ -31,6 +31,7 @@ from app.models.identity import (
     UserRole,
     role_permissions,
 )
+from app.models.leave import LeaveQuota, LeaveRequest, LeaveType
 from app.models.messaging import Conversation, DirectMessage, Note
 from app.models.notification import (
     EmailStatus,
@@ -87,6 +88,9 @@ __all__ = [
     "FileType",
     "ImageType",
     "IndexStatus",
+    "LeaveQuota",
+    "LeaveRequest",
+    "LeaveType",
     "Note",
     "Notification",
     "NotificationPreference",

@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     documents,
     employees,
     health,
+    leave,
     notes,
     notifications,
     roles,
@@ -42,3 +43,4 @@ api_router.include_router(analytics.router)
 api_router.include_router(chat.router)
 api_router.include_router(notes.router)
 api_router.include_router(announcements.router)
+api_router.include_router(leave.router)
