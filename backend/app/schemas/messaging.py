@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -117,3 +117,65 @@ class NoteOut(BaseModel):
     summary_outdated: bool
     content_updated_at: datetime
     created_at: datetime
+
+
+# --- Group chats (ADR-071) --------------------------------------------------------------
+
+GroupName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
+class GroupCreate(BaseModel):
+    name: GroupName
+    member_ids: list[uuid.UUID] = Field(default_factory=list, max_length=200)
+    # Adds every active member of this department (own department, or anyone with users:read).
+    include_department_id: uuid.UUID | None = None
+
+
+class GroupRename(BaseModel):
+    name: GroupName
+
+
+class GroupAddMembers(BaseModel):
+    user_ids: list[uuid.UUID] = Field(min_length=1, max_length=200)
+
+
+class GroupMember(BaseModel):
+    id: uuid.UUID
+    display_name: str
+    department_name: str | None
+    role: Literal["ADMIN", "MEMBER"]
+    last_read_at: datetime | None
+
+
+class GroupMessageOut(BaseModel):
+    id: uuid.UUID
+    group_id: uuid.UUID
+    sender_id: uuid.UUID | None
+    sender_name: str | None
+    kind: Literal["TEXT", "SYSTEM"]
+    body: str
+    created_at: datetime
+    edited_at: datetime | None
+
+
+class GroupSummary(BaseModel):
+    id: uuid.UUID
+    name: str
+    member_count: int
+    my_role: Literal["ADMIN", "MEMBER"]
+    last_message: GroupMessageOut | None
+    last_message_at: datetime | None
+    unread_count: int = Field(ge=0)
+    typing_names: list[str]
+
+
+class GroupDetail(GroupSummary):
+    members: list[GroupMember]
+
+
+class GroupMessagePage(BaseModel):
+    items: list[GroupMessageOut]
+    has_more: bool
+    # For "อ่านแล้ว N คน" and "X กำลังพิมพ์…"
+    reads: list[GroupMember]
+    typing_names: list[str]

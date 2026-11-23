@@ -6,6 +6,7 @@ from app.models.attendance import AttendanceRecord, WorkMode
 from app.models.audit import AuditLog
 from app.models.auth import PasswordResetToken, PendingRegistration, UserSession
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.chat_group import ChatGroup, ChatGroupMember, GroupMessage
 from app.models.document import (
     AccessLevel,
     Document,
@@ -70,6 +71,8 @@ __all__ = [
     "AttendanceRecord",
     "AuditLog",
     "Base",
+    "ChatGroup",
+    "ChatGroupMember",
     "ChatMessage",
     "ChatRole",
     "ChatSession",
@@ -89,6 +92,7 @@ __all__ = [
     "EmploymentStatus",
     "EmploymentType",
     "FileType",
+    "GroupMessage",
     "ImageType",
     "IndexStatus",
     "LeaveQuota",

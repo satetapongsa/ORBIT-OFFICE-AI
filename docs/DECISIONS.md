@@ -729,3 +729,20 @@ the organizer, and a reminder `reminder_minutes` before the start sent by a Cele
 minute (`calendar.send_reminders`, once per meeting, not to people who declined; reset when the
 time changes). Create/update/cancel are audit-logged. Migration `0020`.
 
+
+## ADR-071 — Group chats (2026-11-23)
+**Decision.** `/chat` now lists direct messages and group chats together, newest activity first
+(`?c=` opens a DM, `?g=` a group). Anyone with `chat:use` creates a group ("สร้างกลุ่ม": name,
+people from the directory, and optionally everyone active in their own department — another
+department needs `users:read`); members must have `chat:use`, at most 200. The creator is the
+admin; admins rename, add and remove members; anyone may leave. When the last admin leaves the
+longest-standing member becomes admin, and an empty group is deleted. Non-members get 404.
+Messages work like DMs (ADR-060/062): optimistic sending in order, edit own text messages at any
+time, the sender's name above each run of messages, read state per member ("อ่านแล้ว N คน" /
+"อ่านครบทุกคนแล้ว", names on hover), "X กำลังพิมพ์…" for up to several people, and live updates
+through the same `/chat/events` long poll. Membership changes post `SYSTEM` notices in the
+thread; a notice caused by me does not count as unread for me. The chat badge counts unread
+DMs plus unread group messages. DMs and groups share one thread component with a small adapter
+per kind (`features/chat/components/thread.tsx`); the people picker moved to
+`components/common/people-picker.tsx` (also used by the calendar). Migration `0021` (tables
+locked from the Supabase Data API like the rest).

@@ -168,13 +168,16 @@ async def _summaries(
 
 
 async def unread_total(session: AsyncSession, user: CurrentUser) -> int:
+    """Unread direct messages plus unread group messages (the menu badge)."""
+    from app.services import chat_groups  # chat_groups imports this module
+
     count = await session.scalar(
         select(func.count())
         .select_from(DirectMessage)
         .join(Conversation, Conversation.id == DirectMessage.conversation_id)
         .where(_mine(user.id), _unread_condition(user.id))
     )
-    return int(count or 0)
+    return int(count or 0) + await chat_groups.unread_total(session, user)
 
 
 async def list_conversations(session: AsyncSession, user: CurrentUser) -> ConversationList:

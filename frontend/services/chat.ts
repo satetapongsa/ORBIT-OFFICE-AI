@@ -147,3 +147,133 @@ export function editMessage(
     { method: "PATCH", schema: chatMessageSchema, body: { body } },
   );
 }
+
+// --- Group chats (ADR-071) --------------------------------------------------------------
+
+export const groupMemberSchema = z.object({
+  id: z.string(),
+  display_name: z.string(),
+  department_name: z.string().nullable(),
+  role: z.enum(["ADMIN", "MEMBER"]),
+  last_read_at: z.string().nullable(),
+});
+
+export const groupMessageSchema = z.object({
+  id: z.string(),
+  group_id: z.string(),
+  sender_id: z.string().nullable(),
+  sender_name: z.string().nullable(),
+  kind: z.enum(["TEXT", "SYSTEM"]),
+  body: z.string(),
+  created_at: z.string(),
+  edited_at: z.string().nullable().default(null),
+});
+
+export const groupSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  member_count: z.number().int(),
+  my_role: z.enum(["ADMIN", "MEMBER"]),
+  last_message: groupMessageSchema.nullable(),
+  last_message_at: z.string().nullable(),
+  unread_count: z.number().int().nonnegative(),
+  typing_names: z.array(z.string()).default([]),
+});
+
+export const groupDetailSchema = groupSummarySchema.extend({ members: z.array(groupMemberSchema) });
+
+const groupMessagePageSchema = z.object({
+  items: z.array(groupMessageSchema),
+  has_more: z.boolean(),
+  reads: z.array(groupMemberSchema).default([]),
+  typing_names: z.array(z.string()).default([]),
+});
+
+export type GroupMember = z.infer<typeof groupMemberSchema>;
+export type GroupMessage = z.infer<typeof groupMessageSchema>;
+export type GroupSummary = z.infer<typeof groupSummarySchema>;
+export type GroupDetail = z.infer<typeof groupDetailSchema>;
+export type GroupMessagePage = z.infer<typeof groupMessagePageSchema>;
+
+export const groupQueryKeys = {
+  list: ["chat", "groups"] as const,
+  detail: (id: string) => ["chat", "groups", id] as const,
+  messages: (id: string) => ["chat", "group-messages", id] as const,
+};
+
+const groupPath = (id: string) => `/chat/groups/${encodeURIComponent(id)}`;
+
+export function listGroups(signal?: AbortSignal) {
+  return apiRequest("/chat/groups", { schema: z.array(groupSummarySchema), signal });
+}
+
+export function getGroup(id: string, signal?: AbortSignal) {
+  return apiRequest(groupPath(id), { schema: groupDetailSchema, signal });
+}
+
+export function createGroup(input: {
+  name: string;
+  member_ids: string[];
+  include_department_id?: string | null;
+}): Promise<GroupDetail> {
+  return apiRequest("/chat/groups", { method: "POST", schema: groupDetailSchema, body: input });
+}
+
+export function renameGroup(id: string, name: string): Promise<GroupDetail> {
+  return apiRequest(groupPath(id), { method: "PATCH", schema: groupDetailSchema, body: { name } });
+}
+
+export function addGroupMembers(id: string, userIds: string[]): Promise<GroupDetail> {
+  return apiRequest(`${groupPath(id)}/members`, {
+    method: "POST",
+    schema: groupDetailSchema,
+    body: { user_ids: userIds },
+  });
+}
+
+/** Remove someone (admin), or leave when `userId` is me. */
+export function removeGroupMember(id: string, userId: string): Promise<null> {
+  return apiRequest(`${groupPath(id)}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+    schema: z.null(),
+  });
+}
+
+export function listGroupMessages(
+  id: string,
+  params: { before?: string; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<GroupMessagePage> {
+  const query = new URLSearchParams();
+  if (params.before) query.set("before", params.before);
+  if (params.limit) query.set("limit", String(params.limit));
+  const suffix = query.size ? `?${query}` : "";
+  return apiRequest(`${groupPath(id)}/messages${suffix}`, {
+    schema: groupMessagePageSchema,
+    signal,
+  });
+}
+
+export function sendGroupMessage(id: string, body: string): Promise<GroupMessage> {
+  return apiRequest(`${groupPath(id)}/messages`, {
+    method: "POST",
+    schema: groupMessageSchema,
+    body: { body },
+  });
+}
+
+export function editGroupMessage(id: string, messageId: string, body: string) {
+  return apiRequest(`${groupPath(id)}/messages/${encodeURIComponent(messageId)}`, {
+    method: "PATCH",
+    schema: groupMessageSchema,
+    body: { body },
+  });
+}
+
+export function markGroupRead(id: string) {
+  return apiRequest(`${groupPath(id)}/read`, { method: "POST", schema: unreadSchema });
+}
+
+export function sendGroupTyping(id: string): Promise<null> {
+  return apiRequest(`${groupPath(id)}/typing`, { method: "POST", schema: z.null() });
+}

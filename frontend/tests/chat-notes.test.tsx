@@ -61,6 +61,7 @@ describe("ChatView", () => {
     search = new URLSearchParams("c=c1");
     let messages = [message("m1", "bob", "ประชุมบ่ายสองนะ")];
     const fetchMock = mockApi({
+      "GET /api/v1/chat/groups": () => json([]),
       "GET /api/v1/chat/conversations": () =>
         json({
           items: [
@@ -132,6 +133,7 @@ describe("ChatView", () => {
           gate.wake = () => resolve(json({ version }));
         }) as unknown as Response;
       },
+      "GET /api/v1/chat/groups": () => json([]),
       "GET /api/v1/chat/conversations": () => json({ items: [conversation], unread_total: 0 }),
       "GET /api/v1/chat/conversations/c1/messages": () => json(page),
       "POST /api/v1/chat/conversations/c1/read": () => json({ unread_total: 0 }),
@@ -174,6 +176,7 @@ describe("ChatView", () => {
       { ...message("m2", "me", "10 โมง"), created_at: fresh },
     ];
     const fetchMock = mockApi({
+      "GET /api/v1/chat/groups": () => json([]),
       "GET /api/v1/chat/conversations": () =>
         json({
           items: [
@@ -220,6 +223,7 @@ describe("ChatView", () => {
     const long = "บรรทัดแรก\nบรรทัดที่สอง 64565456465645654564656456545646";
     const items = [{ ...message("m1", "bob", long), created_at: NOW }];
     mockApi({
+      "GET /api/v1/chat/groups": () => json([]),
       "GET /api/v1/chat/conversations": () =>
         json({
           items: [
@@ -251,6 +255,7 @@ describe("ChatView", () => {
   it("opens the thread with a colleague from their profile link", async () => {
     search = new URLSearchParams("with=bob");
     mockApi({
+      "GET /api/v1/chat/groups": () => json([]),
       "GET /api/v1/chat/conversations": () => json({ items: [], unread_total: 0 }),
       "POST /api/v1/chat/conversations": () =>
         json({

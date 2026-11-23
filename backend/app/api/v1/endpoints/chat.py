@@ -16,12 +16,20 @@ from app.schemas.messaging import (
     ChatUnread,
     ConversationList,
     ConversationOut,
+    GroupAddMembers,
+    GroupCreate,
+    GroupDetail,
+    GroupMessageOut,
+    GroupMessagePage,
+    GroupRename,
+    GroupSummary,
     MessageOut,
     MessagePage,
     SendMessage,
     StartConversation,
 )
 from app.services import chat as chat_service
+from app.services import chat_groups as group_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -150,3 +158,114 @@ async def edit_message(
     hub: HubDep,
 ) -> MessageOut:
     return await chat_service.edit_message(db, user, conversation_id, message_id, body.body, hub)
+
+
+# --- Group chats (ADR-071) ------------------------------------------------------------------
+
+
+@router.get("/groups", response_model=list[GroupSummary], summary="My group chats")
+async def list_groups(db: DbDep, user: ChatUser) -> list[GroupSummary]:
+    return await group_service.list_groups(db, user)
+
+
+@router.post(
+    "/groups",
+    response_model=GroupDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a group chat",
+)
+async def create_group(body: GroupCreate, db: DbDep, user: ChatUser, hub: HubDep) -> GroupDetail:
+    return await group_service.create_group(db, user, body, hub)
+
+
+@router.get("/groups/{group_id}", response_model=GroupDetail, summary="Group with its members")
+async def get_group(group_id: uuid.UUID, db: DbDep, user: ChatUser) -> GroupDetail:
+    return await group_service.get_group(db, user, group_id)
+
+
+@router.patch("/groups/{group_id}", response_model=GroupDetail, summary="Rename (admin)")
+async def rename_group(
+    group_id: uuid.UUID, body: GroupRename, db: DbDep, user: ChatUser, hub: HubDep
+) -> GroupDetail:
+    return await group_service.rename_group(db, user, group_id, body.name, hub)
+
+
+@router.post("/groups/{group_id}/members", response_model=GroupDetail, summary="Add (admin)")
+async def add_members(
+    group_id: uuid.UUID, body: GroupAddMembers, db: DbDep, user: ChatUser, hub: HubDep
+) -> GroupDetail:
+    return await group_service.add_members(db, user, group_id, body.user_ids, hub)
+
+
+@router.delete(
+    "/groups/{group_id}/members/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remove a member (admin) or leave (yourself)",
+)
+async def remove_member(
+    group_id: uuid.UUID, user_id: uuid.UUID, db: DbDep, user: ChatUser, hub: HubDep
+) -> Response:
+    await group_service.remove_member(db, user, group_id, user_id, hub)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/groups/{group_id}/messages", response_model=GroupMessagePage, summary="Group messages"
+)
+async def group_messages(
+    group_id: uuid.UUID,
+    db: DbDep,
+    user: ChatUser,
+    before: uuid.UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> GroupMessagePage:
+    return await group_service.list_messages(db, user, group_id, before=before, limit=limit)
+
+
+@router.post(
+    "/groups/{group_id}/messages",
+    response_model=GroupMessageOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Send to the group",
+    dependencies=[Depends(limit_messages)],
+)
+async def send_group_message(
+    group_id: uuid.UUID, body: SendMessage, db: DbDep, user: ChatUser, hub: HubDep
+) -> GroupMessageOut:
+    return await group_service.send_message(db, user, group_id, body.body, hub)
+
+
+@router.patch(
+    "/groups/{group_id}/messages/{message_id}",
+    response_model=GroupMessageOut,
+    summary="Edit my group message",
+    dependencies=[Depends(limit_messages)],
+)
+async def edit_group_message(
+    group_id: uuid.UUID,
+    message_id: uuid.UUID,
+    body: SendMessage,
+    db: DbDep,
+    user: ChatUser,
+    hub: HubDep,
+) -> GroupMessageOut:
+    return await group_service.edit_message(db, user, group_id, message_id, body.body, hub)
+
+
+@router.post("/groups/{group_id}/read", response_model=ChatUnread, summary="Mark as read")
+async def mark_group_read(
+    group_id: uuid.UUID, db: DbDep, user: ChatUser, hub: HubDep
+) -> ChatUnread:
+    await group_service.mark_read(db, user, group_id, hub)
+    return ChatUnread(unread_total=await chat_service.unread_total(db, user))
+
+
+@router.post(
+    "/groups/{group_id}/typing",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="I am typing in the group",
+    dependencies=[Depends(limit_typing)],
+)
+async def group_typing(group_id: uuid.UUID, db: DbDep, user: ChatUser, hub: HubDep) -> Response:
+    await group_service.set_typing(db, user, group_id, hub)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
