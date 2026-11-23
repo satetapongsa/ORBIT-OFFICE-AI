@@ -6,6 +6,7 @@ import {
   Headset,
   LayoutDashboard,
   ListChecks,
+  Megaphone,
   MessagesSquare,
   NotebookPen,
   type LucideIcon,
@@ -51,6 +52,14 @@ export const MAIN_NAV: NavItem[] = [
     icon: Bot,
     permission: "ai:chat",
     phase: 6,
+  },
+  {
+    key: "announcements",
+    label: "ประกาศ",
+    href: "/announcements",
+    icon: Megaphone,
+    permission: null,
+    phase: 8,
   },
   {
     key: "chat",

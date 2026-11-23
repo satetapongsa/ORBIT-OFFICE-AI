@@ -22,6 +22,9 @@ class NotificationType(StrEnum):
     DOCUMENT = "DOCUMENT"  # shared with you, processing failed
     TASK = "TASK"  # assigned to you, status changed, new comment
     TICKET = "TICKET"  # IT helpdesk: new, assigned, status changed, replies
+    ANNOUNCEMENT = "ANNOUNCEMENT"  # company announcements
+    LEAVE = "LEAVE"  # leave requests: submitted, approved, rejected
+    MEETING = "MEETING"  # meeting invitations, changes, reminders
 
 
 class EmailStatus(StrEnum):
@@ -39,6 +42,9 @@ EMAIL_DEFAULTS: dict[NotificationType, bool] = {
     NotificationType.DOCUMENT: False,
     NotificationType.TASK: True,
     NotificationType.TICKET: True,
+    NotificationType.ANNOUNCEMENT: False,
+    NotificationType.LEAVE: True,
+    NotificationType.MEETING: True,
 }
 
 

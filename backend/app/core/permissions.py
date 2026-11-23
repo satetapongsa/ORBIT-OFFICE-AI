@@ -59,6 +59,14 @@ class P(StrEnum):
     AI_USE_TOOLS = "ai:use_tools"
     CHAT_USE = "chat:use"
     NOTES_USE = "notes:use"
+    ANNOUNCEMENTS_MANAGE = "announcements:manage"
+    LEAVE_REQUEST = "leave:request"
+    LEAVE_APPROVE_DEPARTMENT = "leave:approve_department"
+    LEAVE_MANAGE = "leave:manage"
+    ATTENDANCE_CHECKIN = "attendance:checkin"
+    ATTENDANCE_READ_DEPARTMENT = "attendance:read_department"
+    ATTENDANCE_READ_ALL = "attendance:read_all"
+    CALENDAR_USE = "calendar:use"
 
     SYSTEM_CONFIGURE = "system:configure"
     SYSTEM_CONFIGURE_AI = "system:configure_ai"
@@ -104,6 +112,14 @@ PERMISSION_DESCRIPTIONS: dict[P, str] = {
     P.AI_USE_TOOLS: "ให้ผู้ช่วย AI ใช้เครื่องมือของระบบ",
     P.CHAT_USE: "แชทกับพนักงานคนอื่น",
     P.NOTES_USE: "ใช้โน้ตส่วนตัว",
+    P.ANNOUNCEMENTS_MANAGE: "สร้าง แก้ไข และลบประกาศบริษัท",
+    P.LEAVE_REQUEST: "ยื่นใบลาของตนเอง",
+    P.LEAVE_APPROVE_DEPARTMENT: "อนุมัติใบลาของคนในแผนก",
+    P.LEAVE_MANAGE: "จัดการใบลาและโควตาวันลาทั้งองค์กร",
+    P.ATTENDANCE_CHECKIN: "ลงเวลาเข้า-ออกงานของตนเอง",
+    P.ATTENDANCE_READ_DEPARTMENT: "ดูเวลาเข้า-ออกงานของคนในแผนก",
+    P.ATTENDANCE_READ_ALL: "ดูเวลาเข้า-ออกงานทั้งองค์กร",
+    P.CALENDAR_USE: "ใช้ปฏิทินและนัดประชุม",
     P.SYSTEM_CONFIGURE: "ตั้งค่าระบบ",
     P.SYSTEM_CONFIGURE_AI: "ตั้งค่าผู้ให้บริการ AI",
     P.AUDIT_READ: "ดูบันทึกการใช้งานระบบ (Audit log)",
@@ -135,6 +151,9 @@ _EMPLOYEE: frozenset[P] = frozenset(
         P.AI_USE_TOOLS,
         P.CHAT_USE,
         P.NOTES_USE,
+        P.LEAVE_REQUEST,
+        P.ATTENDANCE_CHECKIN,
+        P.CALENDAR_USE,
     }
 )
 
@@ -152,6 +171,8 @@ SYSTEM_ROLES: dict[SystemRole, tuple[str, str, frozenset[P]]] = {
             P.TASKS_MANAGE_DEPARTMENT,
             P.ANALYTICS_READ_DEPARTMENT,
             P.REPORTS_EXPORT,
+            P.LEAVE_APPROVE_DEPARTMENT,
+            P.ATTENDANCE_READ_DEPARTMENT,
         },
     ),
     SystemRole.HR: (
@@ -165,6 +186,9 @@ SYSTEM_ROLES: dict[SystemRole, tuple[str, str, frozenset[P]]] = {
             P.DEPARTMENTS_MANAGE,
             P.EMPLOYEES_READ_SENSITIVE,
             P.EMPLOYEES_MANAGE,
+            P.ANNOUNCEMENTS_MANAGE,
+            P.LEAVE_MANAGE,
+            P.ATTENDANCE_READ_ALL,
         },
     ),
     SystemRole.IT_SUPPORT: (

@@ -27,6 +27,9 @@ class AuditAction(StrEnum):
     PASSWORD_RESET_COMPLETED = "auth.password_reset_completed"  # noqa: S105
     REGISTRATION_REQUESTED = "auth.registration_requested"
     USER_REGISTERED = "auth.registered"
+    ANNOUNCEMENT_CREATED = "announcement.created"
+    ANNOUNCEMENT_UPDATED = "announcement.updated"
+    ANNOUNCEMENT_DELETED = "announcement.deleted"
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DEACTIVATED = "user.deactivated"

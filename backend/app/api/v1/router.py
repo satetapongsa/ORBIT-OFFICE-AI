@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     ai,
     analytics,
+    announcements,
     audit,
     auth,
     chat,
@@ -40,3 +41,4 @@ api_router.include_router(tickets.router)
 api_router.include_router(analytics.router)
 api_router.include_router(chat.router)
 api_router.include_router(notes.router)
+api_router.include_router(announcements.router)

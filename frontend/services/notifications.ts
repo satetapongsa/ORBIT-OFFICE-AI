@@ -10,6 +10,9 @@ export const notificationTypeSchema = z.enum([
   "DOCUMENT",
   "TASK",
   "TICKET",
+  "ANNOUNCEMENT",
+  "LEAVE",
+  "MEETING",
 ]);
 
 export const notificationSchema = z.object({

@@ -666,3 +666,18 @@ questions now fall back to the main chat model when the quick model is refused b
 arrives, and the OpenAI-compatible adapter logs the provider's short error code/type
 (e.g. `model_not_found`) with the model name — never the error message.
 
+## ADR-067 — Company announcements (2026-11-23)
+**Decision.** `/announcements` (menu "ประกาศ" with an unread badge, plus a "ประกาศล่าสุด" card on
+the dashboard). People with `announcements:manage` (HR; ADMIN has every permission) publish
+announcements with a title, text, "important" and "pinned" flags, an audience (whole company
+or one department) and an optional expiry; they can edit and delete them, list expired ones and
+see "อ่านแล้ว X จาก Y คน" (readers counted only inside the audience). Everyone else sees the
+active announcements meant for them (company-wide + own department), pinned first; opening one
+marks it read (`announcement_reads`), and "อ่านทั้งหมด" marks all. Publishing notifies the
+audience (new notification type `ANNOUNCEMENT`, e-mail off by default) with a link that opens
+the announcement. Migration `0017` also adds the notification types `LEAVE` and `MEETING` for
+the next modules, and the permissions for leave, attendance and calendar are defined now
+(`leave:request`, `leave:approve_department`, `leave:manage`, `attendance:checkin`,
+`attendance:read_department`, `attendance:read_all`, `calendar:use`). Create/update/delete are
+audit-logged.
+

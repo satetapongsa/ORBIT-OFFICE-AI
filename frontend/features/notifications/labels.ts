@@ -1,5 +1,8 @@
 import {
   Bell,
+  CalendarDays,
+  Megaphone,
+  Plane,
   FileText,
   Headset,
   ListChecks,
@@ -17,4 +20,7 @@ export const NOTIFICATION_TYPES: Record<NotificationType, { label: string; icon:
   DOCUMENT: { label: "เอกสาร", icon: FileText },
   TASK: { label: "งาน", icon: ListChecks },
   TICKET: { label: "แจ้งปัญหาไอที", icon: Headset },
+  ANNOUNCEMENT: { label: "ประกาศบริษัท", icon: Megaphone },
+  LEAVE: { label: "การลา", icon: Plane },
+  MEETING: { label: "นัดประชุม", icon: CalendarDays },
 };

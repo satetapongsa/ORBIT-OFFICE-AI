@@ -1,5 +1,6 @@
 "use client";
 
+import { LatestAnnouncementsCard } from "@/features/announcements/components/announcement-widgets";
 import {
   Bell,
   Building2,
@@ -528,6 +529,7 @@ export function DashboardView() {
         </h1>
         <p className="text-muted-foreground text-sm">{subtitle}</p>
       </div>
+      <LatestAnnouncementsCard />
       <PersonalSection data={data} selfId={selfId} />
       {data.organization ? <OrganizationSection org={data.organization} /> : null}
       {data.security ? (
