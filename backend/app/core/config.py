@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     # Business time zone: dashboards group activity by local calendar day in this zone.
     app_timezone: str = "Asia/Bangkok"
+    # Working hours for attendance (local time in APP_TIMEZONE). A check-in later than
+    # WORK_START_TIME + LATE_GRACE_MINUTES is marked late.
+    work_start_time: str = Field(default="09:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    work_end_time: str = Field(default="18:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    late_grace_minutes: int = Field(default=15, ge=0, le=240)
 
     # --- Security / authentication ---------------------------------------------------
     jwt_secret_key: SecretStr = SecretStr(DEV_JWT_SECRET_PLACEHOLDER)

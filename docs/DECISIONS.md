@@ -699,3 +699,17 @@ request to the department's approvers (or HR if there are none), decision and ca
 someone else to the requester. Reasons and decision notes are visible only to the requester and
 approvers. Every action is audit-logged. Migration `0018`.
 
+## ADR-069 — Attendance check-in / check-out (2026-11-23)
+**Decision.** `/attendance` (menu "ลงเวลา", `attendance:checkin` for every employee) and a
+check-in card at the top of the dashboard with a live clock that follows the server. Check-in
+and check-out use the **database clock** (the browser's clock is never trusted); the local
+working date and the late flag use `APP_TIMEZONE` and `WORK_START_TIME` + `LATE_GRACE_MINUTES`
+(defaults 09:00 + 15 min; `WORK_END_TIME` 18:00 is shown). One record per person per date
+(`attendance_records`, unique), with work mode (office / WFH / on site) and optional notes;
+check-out only after check-in, once. "ของฉัน": monthly summary (days present, late, WFH, total
+hours, average check-in) and the list of days. Managers (`attendance:read_department`, own
+department) and HR (`attendance:read_all`, any department filter) get a daily board that
+combines check-ins with approved leave (present / late / on leave / not yet) and a monthly report
+per person (with leave days in working days) downloadable as CSV with a BOM for Excel.
+Check-in/out are audit-logged. Migration `0019`.
+

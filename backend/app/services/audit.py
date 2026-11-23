@@ -35,6 +35,8 @@ class AuditAction(StrEnum):
     LEAVE_REJECTED = "leave.rejected"
     LEAVE_CANCELLED = "leave.cancelled"
     LEAVE_SETTINGS_CHANGED = "leave.settings_changed"
+    ATTENDANCE_CHECK_IN = "attendance.check_in"
+    ATTENDANCE_CHECK_OUT = "attendance.check_out"
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DEACTIVATED = "user.deactivated"

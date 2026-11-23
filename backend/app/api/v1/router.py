@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     ai,
     analytics,
     announcements,
+    attendance,
     audit,
     auth,
     chat,
@@ -44,3 +45,4 @@ api_router.include_router(chat.router)
 api_router.include_router(notes.router)
 api_router.include_router(announcements.router)
 api_router.include_router(leave.router)
+api_router.include_router(attendance.router)

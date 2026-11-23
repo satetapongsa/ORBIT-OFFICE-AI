@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Clock,
   FileText,
   Headset,
   LayoutDashboard,
@@ -93,6 +94,14 @@ export const MAIN_NAV: NavItem[] = [
     icon: ListChecks,
     permission: "tasks:read_own",
     phase: 5,
+  },
+  {
+    key: "attendance",
+    label: "ลงเวลา",
+    href: "/attendance",
+    icon: Clock,
+    permission: "attendance:checkin",
+    phase: 8,
   },
   {
     key: "leave",

@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckInCard } from "@/features/attendance/components/check-in-card";
 import { LatestAnnouncementsCard } from "@/features/announcements/components/announcement-widgets";
 import {
   Bell,
@@ -529,6 +530,7 @@ export function DashboardView() {
         </h1>
         <p className="text-muted-foreground text-sm">{subtitle}</p>
       </div>
+      <CheckInCard compact />
       <LatestAnnouncementsCard />
       <PersonalSection data={data} selfId={selfId} />
       {data.organization ? <OrganizationSection org={data.organization} /> : null}
